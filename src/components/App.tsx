@@ -234,7 +234,7 @@ export default function App() {
           </label>
           <label>
             TIS ID
-            <input value={form.tis} onChange={(e) => set('tis', e.target.value.replace(/\D/g, ''))} />
+            <input value={form.tis} onChange={(e) => set('tis', e.target.value)} />
           </label>
           <label>
             CPF (opcional)
@@ -270,7 +270,7 @@ export default function App() {
               <input
                 required
                 value={form.representativeTis || ''}
-                onChange={(e) => set('representativeTis', e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => set('representativeTis', e.target.value)}
               />
             </label>
           )}

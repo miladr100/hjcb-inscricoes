@@ -101,13 +101,13 @@ function obj(row: unknown[], i: number): SheetRow {
     birthDate: iso(row[4]),
     age: row[5] === '' || row[5] == null ? null : Number(row[5]),
     blessing: val(row[6]),
-    tis: val(row[7]).replace(/\.0$/, ''),
+    tis: documentCell(row[7]),
     cpf: cpfCell(row[8]),
     document: documentCell(row[9]),
     city: val(row[10]),
     registrationType: val(row[11]),
     paid: val(row[12]),
-    representativeTis: val(row[13]).replace(/\.0$/, ''),
+    representativeTis: documentCell(row[13]),
   };
 }
 
@@ -196,8 +196,10 @@ function feeAmount(birthDate: string) {
 
 function rowForSheet(x: RegistrationBody) {
   const row = rowOf(x);
+  row[7] = asSheetText(row[7]);
   row[8] = asSheetText(row[8]);
   row[9] = asSheetText(row[9]);
+  row[13] = asSheetText(row[13]);
   return row;
 }
 
