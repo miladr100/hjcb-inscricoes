@@ -17,4 +17,5 @@ export type Registration = Member & {
   registrationType?: string;
   paid?: string;
   representativeTis?: string;
+  taxa?: number | null;
 };

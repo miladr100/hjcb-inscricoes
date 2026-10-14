@@ -25,6 +25,47 @@ export function validCpf(v: string) {
   return calc(9) === +s[9] && calc(10) === +s[10];
 }
 
+export function feeOf(r: { taxa?: number | null; age?: number | null; birthDate?: string }) {
+  if (r.taxa != null && !Number.isNaN(Number(r.taxa))) return Number(r.taxa);
+  return money(r.age ?? calcAge(r.birthDate || ''));
+}
+
+export function isMemberInscribed(
+  member: { givenName?: string; familyName?: string; birthDate?: string; tis?: string; cpf?: string },
+  regs: { givenName?: string; familyName?: string; birthDate?: string; tis?: string; cpf?: string }[],
+) {
+  const cpf = cpfDigits(member.cpf || '');
+  const name = `${member.givenName} ${member.familyName}`.trim().toLowerCase();
+  return regs.some(
+    (r) =>
+      (member.tis && r.tis === String(member.tis)) ||
+      (cpf && cpfDigits(r.cpf || '') === cpf) ||
+      (`${r.givenName} ${r.familyName}`.trim().toLowerCase() === name && r.birthDate === member.birthDate),
+  );
+}
+
+export function memberCadastroChanged(
+  original: { group?: string; country?: string; familyName?: string; givenName?: string; birthDate?: string; blessing?: string; tis?: string; cpf?: string; document?: string },
+  current: { group?: string; country?: string; familyName?: string; givenName?: string; birthDate?: string; blessing?: string; tis?: string; cpf?: string; document?: string },
+) {
+  const fields = ['group', 'country', 'familyName', 'givenName', 'birthDate', 'blessing', 'tis', 'document'] as const;
+  if (fields.some((k) => String(original[k] || '') !== String(current[k] || ''))) return true;
+  return cpfDigits(original.cpf || '') !== cpfDigits(current.cpf || '');
+}
+
+export function birthLabel(value: string) {
+  if (!value) return '—';
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
+export function formatFee(value: number | null) {
+  if (value == null) return '—';
+  if (value === 0) return 'Isento';
+  return `R$ ${value},00`;
+}
+
 export function calcAge(d: string) {
   if (!d) return null;
   const b = new Date(d + 'T12:00:00');

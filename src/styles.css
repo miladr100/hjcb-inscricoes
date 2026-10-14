@@ -90,11 +90,90 @@ h2 {
   box-shadow: 0 3px 18px #00000010;
 }
 
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  background: #16202a80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 40;
+}
+
+.dialog {
+  background: white;
+  border-radius: 18px;
+  padding: 22px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 12px 40px #00000030;
+}
+
+.dialog p {
+  margin: 0 0 18px;
+  color: #3d4d5c;
+  line-height: 1.45;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.tabs button {
+  flex: 1;
+  background: #e8eef3;
+  color: #153a5b;
+}
+
+.tabs button.active {
+  background: #153a5b;
+  color: white;
+}
+
+.filters {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 18px;
+}
+
+.filters button {
+  background: #e8eef3;
+  color: #153a5b;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: 8px;
+}
+
+.filters button.active {
+  background: #153a5b;
+  color: white;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.stats-1 {
+  grid-template-columns: 1fr;
+}
+
+.stats-4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 800px) {
+  .stats-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .stats div {
@@ -257,6 +336,94 @@ button,
   align-items: center;
 }
 
+.cardsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.personCard {
+  background: white;
+  border-radius: 18px;
+  padding: 18px 20px;
+  box-shadow: 0 3px 18px #00000010;
+}
+
+.personCard h3 {
+  margin: 0 0 12px;
+  color: #153a5b;
+}
+
+.memberCard {
+  padding: 0;
+  overflow: hidden;
+}
+
+.memberCard h3 {
+  margin: 0;
+  padding: 14px 20px;
+  color: white;
+}
+
+.memberCard.is-inscribed h3 {
+  background: #18733d;
+}
+
+.memberCard.not-inscribed h3 {
+  background: #a52727;
+}
+
+.memberCard .inscribe {
+  margin: 12px 20px 0;
+  background: #e8eef3;
+  color: #153a5b;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: 8px;
+}
+
+.memberCard dl {
+  padding: 12px 20px 18px;
+}
+
+.personCard dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.personCard dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) 1fr;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.personCard dl > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.personCard dt {
+  color: #65717d;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.personCard dd {
+  margin: 0;
+}
+
+.empty {
+  background: white;
+  border-radius: 18px;
+  padding: 20px;
+  text-align: center;
+  color: #65717d;
+}
+
 .tableWrap {
   overflow: auto;
 }
@@ -301,6 +468,19 @@ td {
 
   .stats {
     gap: 7px;
+  }
+
+  .stats-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stats-4 b {
+    font-size: 18px;
+  }
+
+  .personCard dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 
   .card {

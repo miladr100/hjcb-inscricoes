@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { InstallPrompt } from './InstallPrompt';
+import { MembersBoard } from './MembersBoard';
+import { RegistrationsBoard } from './RegistrationsBoard';
 import { EMPTY_REGISTRATION } from '../constants';
-import { calcAge, cpfDigits, cpfMask, money, req, validCpf } from '../helpers';
+import { calcAge, cpfDigits, cpfMask, feeOf, formatFee, memberCadastroChanged, money, req, validCpf } from '../helpers';
 import type { Member, Registration } from '../types';
 
 export default function App() {
@@ -15,6 +17,9 @@ export default function App() {
   const [editing, setEditing] = useState<Registration | null>(null);
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<'form' | 'cards' | 'members'>('form');
+  const [sourceMember, setSourceMember] = useState<Member | null>(null);
+  const [memberPrompt, setMemberPrompt] = useState<'update' | 'create' | null>(null);
 
   const [form, setForm] = useState<Registration>(EMPTY_REGISTRATION);
 
@@ -62,27 +67,39 @@ export default function App() {
       paid: 'Não pago',
       representativeTis: '',
     });
+    setSourceMember(m);
     setQ('');
   };
 
   const set = (k: keyof Registration, v: any) =>
     setForm((f) => ({ ...f, [k]: v, ...(k === 'birthDate' ? { age: calcAge(v) } : {}) }));
 
-  async function save(e: FormEvent) {
-    e.preventDefault();
-    if (saving) return;
-    setMsg('');
-    if (form.cpf && !validCpf(form.cpf)) {
-      setMsg('CPF inválido.');
-      return;
-    }
+  async function submitInscription(updateCadastro: boolean) {
+    setMemberPrompt(null);
     setSaving(true);
     try {
       const payload = { ...form, cpf: cpfDigits(form.cpf) };
       if (editing) await req(`/registrations/${editing.row}`, { method: 'PUT', body: JSON.stringify(payload) });
       else await req('/registrations', { method: 'POST', body: JSON.stringify(payload) });
-      setMsg(editing ? 'Inscrição atualizada.' : 'Inscrição realizada com sucesso.');
+      let done = editing ? 'Inscrição atualizada.' : 'Inscrição realizada com sucesso.';
+      if (updateCadastro && sourceMember) {
+        try {
+          await req(`/members/${sourceMember.row}`, { method: 'PUT', body: JSON.stringify(payload) });
+          done = 'Inscrição realizada e cadastro do membro atualizado.';
+        } catch (memberError: any) {
+          done = `Inscrição realizada, mas o cadastro do membro não foi atualizado: ${memberError.message}`;
+        }
+      } else if (updateCadastro) {
+        try {
+          await req('/members', { method: 'POST', body: JSON.stringify(payload) });
+          done = 'Inscrição realizada e pessoa adicionada ao cadastro de membros.';
+        } catch (memberError: any) {
+          done = `Inscrição realizada, mas a pessoa não foi adicionada ao cadastro de membros: ${memberError.message}`;
+        }
+      }
+      setMsg(done);
       setEditing(null);
+      setSourceMember(null);
       setForm(EMPTY_REGISTRATION);
       await load();
     } catch (e: any) {
@@ -92,8 +109,28 @@ export default function App() {
     }
   }
 
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (saving) return;
+    setMsg('');
+    if (form.cpf && !validCpf(form.cpf)) {
+      setMsg('CPF inválido.');
+      return;
+    }
+    if (!editing && sourceMember && memberCadastroChanged(sourceMember, form)) {
+      setMemberPrompt('update');
+      return;
+    }
+    if (!editing && !sourceMember) {
+      setMemberPrompt('create');
+      return;
+    }
+    await submitInscription(false);
+  }
+
   function edit(r: Registration) {
     setEditing(r);
+    setSourceMember(null);
     setForm({ ...EMPTY_REGISTRATION, ...r, age: calcAge(r.birthDate) });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -167,6 +204,33 @@ export default function App() {
           Sair
         </button>
       </header>
+      <nav className="tabs" aria-label="Seções">
+        <button type="button" className={tab === 'form' ? 'active' : undefined} onClick={() => setTab('form')}>
+          Formulário
+        </button>
+        <button type="button" className={tab === 'cards' ? 'active' : undefined} onClick={() => setTab('cards')}>
+          Inscritos
+        </button>
+        <button type="button" className={tab === 'members' ? 'active' : undefined} onClick={() => setTab('members')}>
+          Cadastro
+        </button>
+      </nav>
+      {tab === 'cards' ? (
+        <RegistrationsBoard regs={regs} />
+      ) : tab === 'members' ? (
+        <MembersBoard
+          members={members}
+          regs={regs}
+          onCreated={load}
+          onInscribe={(m) => {
+            setEditing(null);
+            pick(m);
+            setTab('form');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      ) : (
+      <>
       <section className="stats">
         <div>
           <b>{regs.length}</b>
@@ -205,6 +269,7 @@ export default function App() {
           className="link"
           onClick={() => {
             setForm(EMPTY_REGISTRATION);
+            setSourceMember(null);
             setQ('');
           }}
         >
@@ -306,7 +371,11 @@ export default function App() {
           </div>
           </fieldset>
         </form>
-        {msg && <p className={msg.includes('sucesso') || msg.includes('atualizada') ? 'success' : 'error'}>{msg}</p>}
+        {msg && (
+          <p className={msg.includes('sucesso') || msg.includes('atualizad') || msg.includes('realizada') ? 'success' : 'error'}>
+            {msg}
+          </p>
+        )}
       </section>
       <section className="card">
         <div className="titleRow">
@@ -324,6 +393,7 @@ export default function App() {
                 <th>Bênção</th>
                 <th>Tipo</th>
                 <th>Pagamento</th>
+                <th>Taxa</th>
                 <th></th>
               </tr>
             </thead>
@@ -337,6 +407,7 @@ export default function App() {
                   <td>{r.blessing}</td>
                   <td>{r.registrationType || 'Participante'}</td>
                   <td>{r.paid || 'Não pago'}</td>
+                  <td>{formatFee(feeOf(r))}</td>
                   <td>
                     <button className="mini" onClick={() => edit(r)}>
                       Editar
@@ -351,7 +422,31 @@ export default function App() {
           </table>
         </div>
       </section>
+      </>
+      )}
       </main>
+      {memberPrompt && (
+        <div className="dialogBackdrop" role="dialog" aria-modal="true" aria-labelledby="member-prompt-title">
+          <div className="dialog">
+            <h2 id="member-prompt-title">
+              {memberPrompt === 'update' ? 'Atualizar cadastro do membro?' : 'Adicionar ao cadastro de membros?'}
+            </h2>
+            <p>
+              {memberPrompt === 'update'
+                ? 'Os dados trazidos do cadastro foram alterados. Deseja salvar essas alterações também na planilha de membros?'
+                : 'Esta pessoa não está no cadastro de membros. Deseja adicioná-la também na planilha de membros?'}
+            </p>
+            <div className="actions">
+              <button type="button" onClick={() => submitInscription(true)}>
+                {memberPrompt === 'update' ? 'Sim, atualizar cadastro' : 'Sim, cadastrar membro'}
+              </button>
+              <button type="button" className="ghost" onClick={() => submitInscription(false)}>
+                Não, só inscrever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

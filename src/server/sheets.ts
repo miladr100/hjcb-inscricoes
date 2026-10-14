@@ -36,6 +36,7 @@ export type SheetRow = {
   registrationType: string;
   paid: string;
   representativeTis: string;
+  taxa: number | null;
 };
 
 export type RegistrationBody = {
@@ -108,6 +109,7 @@ function obj(row: unknown[], i: number): SheetRow {
     registrationType: val(row[11]),
     paid: val(row[12]),
     representativeTis: documentCell(row[13]),
+    taxa: row[14] === '' || row[14] == null ? null : Number(val(row[14]).replace(/^'/, '')),
   };
 }
 
@@ -221,6 +223,65 @@ export function rowOf(x: RegistrationBody) {
     x.representativeTis || '',
     feeAmount(x.birthDate || ''),
   ];
+}
+
+export type MemberBody = {
+  group?: string;
+  country?: string;
+  familyName?: string;
+  givenName?: string;
+  birthDate?: string;
+  blessing?: string;
+  tis?: string;
+  cpf?: string;
+  document?: string;
+};
+
+function memberRow(x: MemberBody) {
+  return [
+    x.group || 'Group 3',
+    x.country || 'Brazil',
+    x.familyName,
+    x.givenName,
+    x.birthDate,
+    age(x.birthDate || ''),
+    x.blessing,
+    asSheetText(x.tis || ''),
+    asSheetText((x.cpf || '').replace(/\D/g, '')),
+    asSheetText(x.document || ''),
+  ];
+}
+
+export async function findDuplicateMember(x: MemberBody, ignoreRow = 0) {
+  const all = await readMembers();
+  const cpf = (x.cpf || '').replace(/\D/g, '');
+  const name = `${x.givenName} ${x.familyName}`.trim().toLowerCase();
+  return all.find(
+    (r) =>
+      r.row !== ignoreRow &&
+      ((x.tis && r.tis === String(x.tis)) ||
+        (cpf && r.cpf.replace(/\D/g, '') === cpf) ||
+        (`${r.givenName} ${r.familyName}`.trim().toLowerCase() === name && r.birthDate === x.birthDate)),
+  );
+}
+
+export async function appendMember(x: MemberBody) {
+  await sheets().spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `'${DB}'!A:J`,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: [memberRow(x)] },
+  });
+}
+
+export async function updateMember(row: number, x: MemberBody) {
+  await sheets().spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `'${DB}'!A${row}:J${row}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [memberRow(x)] },
+  });
 }
 
 export async function findDuplicate(x: RegistrationBody, ignoreRow = 0) {
