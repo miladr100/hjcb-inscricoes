@@ -30,18 +30,10 @@ export function feeOf(r: { taxa?: number | null; age?: number | null; birthDate?
   return money(r.age ?? calcAge(r.birthDate || ''));
 }
 
-export function isMemberInscribed(
-  member: { givenName?: string; familyName?: string; birthDate?: string; tis?: string; cpf?: string },
-  regs: { givenName?: string; familyName?: string; birthDate?: string; tis?: string; cpf?: string }[],
-) {
-  const cpf = cpfDigits(member.cpf || '');
-  const name = `${member.givenName} ${member.familyName}`.trim().toLowerCase();
-  return regs.some(
-    (r) =>
-      (member.tis && r.tis === String(member.tis)) ||
-      (cpf && cpfDigits(r.cpf || '') === cpf) ||
-      (`${r.givenName} ${r.familyName}`.trim().toLowerCase() === name && r.birthDate === member.birthDate),
-  );
+export function isMemberInscribed(member: { id?: string }, regs: { id?: string }[]) {
+  const id = (member.id || '').trim();
+  if (!id) return false;
+  return regs.some((r) => (r.id || '').trim() === id);
 }
 
 export function memberCadastroChanged(

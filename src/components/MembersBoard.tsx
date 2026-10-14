@@ -63,7 +63,7 @@ export function MembersBoard({
     }
     setSaving(true);
     try {
-      await req('/members', { method: 'POST', body: JSON.stringify({ ...form, cpf: cpfDigits(form.cpf) }) });
+      await req('/members', { method: 'POST', body: JSON.stringify({ ...form, cpf: cpfDigits(form.cpf), id: form.id || crypto.randomUUID() }) });
       setMsg('Membro cadastrado com sucesso.');
       setForm(EMPTY_MEMBER);
       setOpen(false);

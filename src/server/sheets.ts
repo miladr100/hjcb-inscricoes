@@ -5,6 +5,7 @@ const DB = 'Banco de Dados';
 const REG = 'Inscricoes';
 
 export const BASE_HEADERS = [
+  'id',
   'Group',
   'Country',
   'Family Name',
@@ -22,6 +23,7 @@ const ALL = [...BASE_HEADERS, ...EXTRA_HEADERS];
 
 export type SheetRow = {
   row: number;
+  id: string;
   group: string;
   country: string;
   familyName: string;
@@ -40,6 +42,7 @@ export type SheetRow = {
 };
 
 export type RegistrationBody = {
+  id?: string;
   group?: string;
   country?: string;
   familyName?: string;
@@ -92,28 +95,54 @@ function iso(v: unknown) {
   return isNaN(+d) ? val(v) : d.toISOString().slice(0, 10);
 }
 
+export function newPersonId() {
+  return crypto.randomUUID();
+}
+
 function obj(row: unknown[], i: number): SheetRow {
   return {
     row: i + 2,
-    group: val(row[0]),
-    country: val(row[1]),
-    familyName: val(row[2]),
-    givenName: val(row[3]),
-    birthDate: iso(row[4]),
-    age: row[5] === '' || row[5] == null ? null : Number(row[5]),
-    blessing: val(row[6]),
-    tis: documentCell(row[7]),
-    cpf: cpfCell(row[8]),
-    document: documentCell(row[9]),
-    city: val(row[10]),
-    registrationType: val(row[11]),
-    paid: val(row[12]),
-    representativeTis: documentCell(row[13]),
-    taxa: row[14] === '' || row[14] == null ? null : Number(val(row[14]).replace(/^'/, '')),
+    id: val(row[0]).replace(/^'/, ''),
+    group: val(row[1]),
+    country: val(row[2]),
+    familyName: val(row[3]),
+    givenName: val(row[4]),
+    birthDate: iso(row[5]),
+    age: row[6] === '' || row[6] == null ? null : Number(row[6]),
+    blessing: val(row[7]),
+    tis: documentCell(row[8]),
+    cpf: cpfCell(row[9]),
+    document: documentCell(row[10]),
+    city: val(row[11]),
+    registrationType: val(row[12]),
+    paid: val(row[13]),
+    representativeTis: documentCell(row[14]),
+    taxa: row[15] === '' || row[15] == null ? null : Number(val(row[15]).replace(/^'/, '')),
   };
 }
 
-async function read(tab: string, range = 'A2:O') {
+function hasPerson(row: SheetRow) {
+  return Boolean(row.givenName.trim() || row.familyName.trim());
+}
+
+function nameBirthKey(row: { givenName?: string; familyName?: string; birthDate?: string }) {
+  return `${(row.givenName || '').trim().toLowerCase()}|${(row.familyName || '').trim().toLowerCase()}|${row.birthDate || ''}`;
+}
+
+function samePerson(
+  a: { id?: string; givenName?: string; familyName?: string; birthDate?: string; cpf?: string },
+  b: { id?: string; givenName?: string; familyName?: string; birthDate?: string; cpf?: string },
+) {
+  if (a.id && b.id && a.id === b.id) return true;
+  const cpfA = (a.cpf || '').replace(/\D/g, '');
+  const cpfB = (b.cpf || '').replace(/\D/g, '');
+  if (cpfA && cpfB && cpfA === cpfB) return true;
+  const nameA = `${a.givenName || ''} ${a.familyName || ''}`.trim().toLowerCase();
+  const nameB = `${b.givenName || ''} ${b.familyName || ''}`.trim().toLowerCase();
+  return Boolean(nameA && nameB && nameA === nameB && a.birthDate && a.birthDate === b.birthDate);
+}
+
+async function read(tab: string, range = 'A2:P') {
   const r = await sheets().spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: `'${tab}'!${range}`,
@@ -123,17 +152,69 @@ async function read(tab: string, range = 'A2:O') {
   return (r.data.values || []).map((row, i) => obj(row, i));
 }
 
-export function readMembers() {
-  return read(DB, 'A2:J');
+let ensuringIds: Promise<void> | null = null;
+
+async function fillMissingIds() {
+  const [members, registrations] = await Promise.all([read(DB, 'A2:K'), read(REG)]);
+  const used = new Set(
+    [...members, ...registrations].map((row) => row.id.trim()).filter(Boolean),
+  );
+  const nextId = () => {
+    let id = newPersonId();
+    while (used.has(id)) id = newPersonId();
+    used.add(id);
+    return id;
+  };
+
+  const memberWrites: { range: string; values: string[][] }[] = [];
+  for (const member of members) {
+    if (!hasPerson(member) || member.id.trim()) continue;
+    member.id = nextId();
+    memberWrites.push({ range: `'${DB}'!A${member.row}`, values: [[member.id]] });
+  }
+
+  const byCpf = new Map<string, SheetRow>();
+  const byName = new Map<string, SheetRow>();
+  for (const member of members) {
+    if (!hasPerson(member)) continue;
+    if (member.cpf) byCpf.set(member.cpf.replace(/\D/g, ''), member);
+    if (member.birthDate) byName.set(nameBirthKey(member), member);
+  }
+
+  const registrationWrites: { range: string; values: string[][] }[] = [];
+  for (const registration of registrations) {
+    if (!hasPerson(registration) || registration.id.trim()) continue;
+    const cpf = registration.cpf.replace(/\D/g, '');
+    const match = (cpf && byCpf.get(cpf)) || (registration.birthDate && byName.get(nameBirthKey(registration)));
+    registration.id = match?.id || nextId();
+    registrationWrites.push({ range: `'${REG}'!A${registration.row}`, values: [[registration.id]] });
+  }
+
+  const data = [...memberWrites, ...registrationWrites];
+  if (!data.length) return;
+  await sheets().spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { valueInputOption: 'RAW', data },
+  });
 }
 
-export function readRegistrations() {
+export function ensurePersonIds() {
+  if (!ensuringIds) ensuringIds = fillMissingIds().finally(() => { ensuringIds = null; });
+  return ensuringIds;
+}
+
+export async function readMembers() {
+  await ensurePersonIds();
+  return read(DB, 'A2:K');
+}
+
+export async function readRegistrations() {
   return read(REG);
 }
 
 export async function ensureHeaders() {
   const s = sheets();
-  const r = await s.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `'${REG}'!A1:O1` });
+  const r = await s.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `'${REG}'!A1:P1` });
   let h = (r.data.values?.[0] || []).map((cell) => String(cell));
   const stateIndex = h.findIndex((cell) => cell.trim() === 'State');
   if (stateIndex >= 0) {
@@ -160,7 +241,7 @@ export async function ensureHeaders() {
   if (!same) {
     await s.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
-      range: `'${REG}'!A1:O1`,
+      range: `'${REG}'!A1:P1`,
       valueInputOption: 'RAW',
       requestBody: { values: [ALL] },
     });
@@ -171,12 +252,13 @@ export async function ensureHeaders() {
       const last = rows[rows.length - 1].row;
       await s.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
-        range: `'${REG}'!O2:O${last}`,
+        range: `'${REG}'!P2:P${last}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: rows.map((row) => [feeAmount(row.birthDate)]) },
       });
     }
   }
+  await ensurePersonIds();
 }
 
 function age(d: string) {
@@ -196,17 +278,22 @@ function feeAmount(birthDate: string) {
   return 50;
 }
 
-function rowForSheet(x: RegistrationBody) {
-  const row = rowOf(x);
-  row[7] = asSheetText(row[7]);
+function resolveId(x: { id?: string }, fallback = '') {
+  return (x.id || fallback || '').trim() || newPersonId();
+}
+
+function rowForSheet(x: RegistrationBody, fallbackId = '') {
+  const row = rowOf({ ...x, id: resolveId(x, fallbackId) });
   row[8] = asSheetText(row[8]);
   row[9] = asSheetText(row[9]);
-  row[13] = asSheetText(row[13]);
+  row[10] = asSheetText(row[10]);
+  row[14] = asSheetText(row[14]);
   return row;
 }
 
 export function rowOf(x: RegistrationBody) {
   return [
+    x.id || '',
     x.group || 'Group 3',
     x.country || 'Brazil',
     x.familyName,
@@ -226,6 +313,7 @@ export function rowOf(x: RegistrationBody) {
 }
 
 export type MemberBody = {
+  id?: string;
   group?: string;
   country?: string;
   familyName?: string;
@@ -237,8 +325,9 @@ export type MemberBody = {
   document?: string;
 };
 
-function memberRow(x: MemberBody) {
+function memberRow(x: MemberBody, fallbackId = '') {
   return [
+    resolveId(x, fallbackId),
     x.group || 'Group 3',
     x.country || 'Brazil',
     x.familyName,
@@ -254,21 +343,13 @@ function memberRow(x: MemberBody) {
 
 export async function findDuplicateMember(x: MemberBody, ignoreRow = 0) {
   const all = await readMembers();
-  const cpf = (x.cpf || '').replace(/\D/g, '');
-  const name = `${x.givenName} ${x.familyName}`.trim().toLowerCase();
-  return all.find(
-    (r) =>
-      r.row !== ignoreRow &&
-      ((x.tis && r.tis === String(x.tis)) ||
-        (cpf && r.cpf.replace(/\D/g, '') === cpf) ||
-        (`${r.givenName} ${r.familyName}`.trim().toLowerCase() === name && r.birthDate === x.birthDate)),
-  );
+  return all.find((r) => r.row !== ignoreRow && samePerson(x, r));
 }
 
 export async function appendMember(x: MemberBody) {
   await sheets().spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `'${DB}'!A:J`,
+    range: `'${DB}'!A:K`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [memberRow(x)] },
@@ -276,31 +357,24 @@ export async function appendMember(x: MemberBody) {
 }
 
 export async function updateMember(row: number, x: MemberBody) {
+  const existing = (await readMembers()).find((r) => r.row === row);
   await sheets().spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `'${DB}'!A${row}:J${row}`,
+    range: `'${DB}'!A${row}:K${row}`,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [memberRow(x)] },
+    requestBody: { values: [memberRow(x, existing?.id)] },
   });
 }
 
 export async function findDuplicate(x: RegistrationBody, ignoreRow = 0) {
   const all = await readRegistrations();
-  const cpf = (x.cpf || '').replace(/\D/g, '');
-  const name = `${x.givenName} ${x.familyName}`.trim().toLowerCase();
-  return all.find(
-    (r) =>
-      r.row !== ignoreRow &&
-      ((x.tis && r.tis === String(x.tis)) ||
-        (cpf && r.cpf.replace(/\D/g, '') === cpf) ||
-        (`${r.givenName} ${r.familyName}`.trim().toLowerCase() === name && r.birthDate === x.birthDate)),
-  );
+  return all.find((r) => r.row !== ignoreRow && samePerson(x, r));
 }
 
 export async function appendRegistration(x: RegistrationBody) {
   await sheets().spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `'${REG}'!A:O`,
+    range: `'${REG}'!A:P`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [rowForSheet(x)] },
@@ -308,11 +382,12 @@ export async function appendRegistration(x: RegistrationBody) {
 }
 
 export async function updateRegistration(row: number, x: RegistrationBody) {
+  const existing = (await readRegistrations()).find((r) => r.row === row);
   await sheets().spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `'${REG}'!A${row}:O${row}`,
+    range: `'${REG}'!A${row}:P${row}`,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [rowForSheet(x)] },
+    requestBody: { values: [rowForSheet(x, existing?.id)] },
   });
 }
 
@@ -344,6 +419,6 @@ export async function exportCsv() {
   const rows = await readRegistrations();
   rows.sort((a, b) => (a.representativeTis || a.tis).localeCompare(b.representativeTis || b.tis));
   const esc = (x: unknown) => '"' + String(x ?? '').replaceAll('"', '""') + '"';
-  const csv = [BASE_HEADERS, ...rows.map((r) => rowOf(r).slice(0, 10))].map((r) => r.map(esc).join(',')).join('\n');
+  const csv = [BASE_HEADERS, ...rows.map((r) => rowOf(r).slice(0, 11))].map((r) => r.map(esc).join(',')).join('\n');
   return '\ufeff' + csv;
 }

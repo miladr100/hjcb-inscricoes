@@ -1,5 +1,6 @@
 export type Member = {
   row: number;
+  id: string;
   group: string;
   country: string;
   familyName: string;

@@ -4,6 +4,7 @@ export const API = '/api';
 
 export const EMPTY_REGISTRATION: Registration = {
   row: 0,
+  id: '',
   group: 'Group 3',
   country: 'Brazil',
   familyName: '',
@@ -22,6 +23,7 @@ export const EMPTY_REGISTRATION: Registration = {
 
 export const EMPTY_MEMBER: Member = {
   row: 0,
+  id: '',
   group: 'Group 3',
   country: 'Brazil',
   familyName: '',

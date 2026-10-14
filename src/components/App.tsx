@@ -74,27 +74,37 @@ export default function App() {
   const set = (k: keyof Registration, v: any) =>
     setForm((f) => ({ ...f, [k]: v, ...(k === 'birthDate' ? { age: calcAge(v) } : {}) }));
 
+  function closeMemberPrompt() {
+    setMemberPrompt(null);
+  }
+
+  useEffect(() => {
+    if (!memberPrompt) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMemberPrompt();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [memberPrompt]);
+
   async function submitInscription(updateCadastro: boolean) {
     setMemberPrompt(null);
     setSaving(true);
     try {
-      const payload = { ...form, cpf: cpfDigits(form.cpf) };
+      const payload = { ...form, cpf: cpfDigits(form.cpf), id: form.id || crypto.randomUUID() };
+      let done = editing ? 'Inscrição atualizada.' : 'Inscrição realizada com sucesso.';
+      if (!editing && updateCadastro && !sourceMember) {
+        await req('/members', { method: 'POST', body: JSON.stringify(payload) });
+        done = 'Inscrição realizada e pessoa adicionada ao cadastro de membros.';
+      }
       if (editing) await req(`/registrations/${editing.row}`, { method: 'PUT', body: JSON.stringify(payload) });
       else await req('/registrations', { method: 'POST', body: JSON.stringify(payload) });
-      let done = editing ? 'Inscrição atualizada.' : 'Inscrição realizada com sucesso.';
       if (updateCadastro && sourceMember) {
         try {
           await req(`/members/${sourceMember.row}`, { method: 'PUT', body: JSON.stringify(payload) });
           done = 'Inscrição realizada e cadastro do membro atualizado.';
         } catch (memberError: any) {
           done = `Inscrição realizada, mas o cadastro do membro não foi atualizado: ${memberError.message}`;
-        }
-      } else if (updateCadastro) {
-        try {
-          await req('/members', { method: 'POST', body: JSON.stringify(payload) });
-          done = 'Inscrição realizada e pessoa adicionada ao cadastro de membros.';
-        } catch (memberError: any) {
-          done = `Inscrição realizada, mas a pessoa não foi adicionada ao cadastro de membros: ${memberError.message}`;
         }
       }
       setMsg(done);
@@ -426,24 +436,47 @@ export default function App() {
       )}
       </main>
       {memberPrompt && (
-        <div className="dialogBackdrop" role="dialog" aria-modal="true" aria-labelledby="member-prompt-title">
-          <div className="dialog">
-            <h2 id="member-prompt-title">
-              {memberPrompt === 'update' ? 'Atualizar cadastro do membro?' : 'Adicionar ao cadastro de membros?'}
-            </h2>
-            <p>
-              {memberPrompt === 'update'
-                ? 'Os dados trazidos do cadastro foram alterados. Deseja salvar essas alterações também na planilha de membros?'
-                : 'Esta pessoa não está no cadastro de membros. Deseja adicioná-la também na planilha de membros?'}
-            </p>
-            <div className="actions">
-              <button type="button" onClick={() => submitInscription(true)}>
-                {memberPrompt === 'update' ? 'Sim, atualizar cadastro' : 'Sim, cadastrar membro'}
-              </button>
-              <button type="button" className="ghost" onClick={() => submitInscription(false)}>
-                Não, só inscrever
-              </button>
-            </div>
+        <div
+          className="dialogBackdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="member-prompt-title"
+          onClick={closeMemberPrompt}
+        >
+          <div className="dialog" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="dialogClose" aria-label="Fechar" onClick={closeMemberPrompt}>
+              ×
+            </button>
+            {memberPrompt === 'update' ? (
+              <>
+                <h2 id="member-prompt-title">Atualizar cadastro do membro?</h2>
+                <p>
+                  Os dados trazidos do cadastro foram alterados. Deseja salvar essas alterações também na planilha de
+                  membros?
+                </p>
+                <div className="actions">
+                  <button type="button" onClick={() => submitInscription(true)}>
+                    Sim, atualizar cadastro
+                  </button>
+                  <button type="button" className="ghost" onClick={() => submitInscription(false)}>
+                    Não, só inscrever
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 id="member-prompt-title">Cadastro obrigatório</h2>
+                <p>
+                  Toda pessoa inscrita precisa constar no cadastro de membros. Ao concordar, ela será cadastrada e
+                  inscrita. Se fechar este aviso, nada será gravado.
+                </p>
+                <div className="actions">
+                  <button type="button" onClick={() => submitInscription(true)}>
+                    Concordar
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
