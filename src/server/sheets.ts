@@ -185,7 +185,7 @@ async function fillMissingIds() {
   for (const registration of registrations) {
     if (!hasPerson(registration) || registration.id.trim()) continue;
     const cpf = registration.cpf.replace(/\D/g, '');
-    const match = (cpf && byCpf.get(cpf)) || (registration.birthDate && byName.get(nameBirthKey(registration)));
+    const match = (cpf ? byCpf.get(cpf) : undefined) || (registration.birthDate ? byName.get(nameBirthKey(registration)) : undefined);
     registration.id = match?.id || nextId();
     registrationWrites.push({ range: `'${REG}'!A${registration.row}`, values: [[registration.id]] });
   }
