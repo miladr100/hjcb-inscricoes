@@ -218,6 +218,10 @@ h2 {
   margin-top: 12px;
 }
 
+.repSearch {
+  grid-column: 1 / -1;
+}
+
 fieldset {
   border: 0;
   margin: 0;

@@ -66,10 +66,16 @@ export function RegistrationsBoard({ regs }: { regs: Registration[] }) {
                 <dd>{r.registrationType || 'Participante'}</dd>
               </div>
               {r.registrationType === 'JS Registration' && (
-                <div>
-                  <dt>TIS do representante</dt>
-                  <dd>{r.representativeTis || '—'}</dd>
-                </div>
+                <>
+                  <div>
+                    <dt>Representante</dt>
+                    <dd>{r.representativeName || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>TIS do representante</dt>
+                    <dd>{r.representativeTis || '—'}</dd>
+                  </div>
+                </>
               )}
               <div>
                 <dt>Pagamento</dt>

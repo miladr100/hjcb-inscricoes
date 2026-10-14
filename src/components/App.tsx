@@ -5,7 +5,7 @@ import { InstallPrompt } from './InstallPrompt';
 import { MembersBoard } from './MembersBoard';
 import { RegistrationsBoard } from './RegistrationsBoard';
 import { EMPTY_REGISTRATION } from '../constants';
-import { calcAge, cpfDigits, cpfMask, feeOf, formatFee, memberCadastroChanged, money, req, validCpf } from '../helpers';
+import { calcAge, cpfDigits, cpfMask, feeOf, formatFee, fullName, memberCadastroChanged, money, req, validCpf } from '../helpers';
 import type { Member, Registration } from '../types';
 
 export default function App() {
@@ -14,6 +14,7 @@ export default function App() {
   const [members, setMembers] = useState<Member[]>([]);
   const [regs, setRegs] = useState<Registration[]>([]);
   const [q, setQ] = useState('');
+  const [repQ, setRepQ] = useState('');
   const [editing, setEditing] = useState<Registration | null>(null);
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
@@ -54,6 +55,19 @@ export default function App() {
       .slice(0, 12);
   }, [q, members]);
 
+  const foundReps = useMemo(() => {
+    const s = repQ.toLowerCase().trim();
+    if (!s || form.registrationType !== 'JS Registration') return [];
+    if (form.representativeName && form.representativeName.toLowerCase().trim() === s) return [];
+    return regs
+      .filter((r) => {
+        if (editing && r.row === editing.row) return false;
+        if (form.id && r.id && r.id === form.id) return false;
+        return `${fullName(r)} ${r.tis}`.toLowerCase().includes(s);
+      })
+      .slice(0, 12);
+  }, [repQ, regs, form.registrationType, form.representativeName, form.id, editing]);
+
   const fee = money(form.age);
 
   const pick = (m: Member) => {
@@ -66,9 +80,17 @@ export default function App() {
       registrationType: 'Participante',
       paid: 'Não pago',
       representativeTis: '',
+      representativeName: '',
     });
     setSourceMember(m);
     setQ('');
+    setRepQ('');
+  };
+
+  const pickRepresentative = (r: Registration) => {
+    const name = fullName(r);
+    setForm((f) => ({ ...f, representativeTis: r.tis || '', representativeName: name }));
+    setRepQ(name);
   };
 
   const set = (k: keyof Registration, v: any) =>
@@ -111,6 +133,7 @@ export default function App() {
       setEditing(null);
       setSourceMember(null);
       setForm(EMPTY_REGISTRATION);
+      setRepQ('');
       await load();
     } catch (e: any) {
       setMsg(e.message);
@@ -127,6 +150,10 @@ export default function App() {
       setMsg('CPF inválido.');
       return;
     }
+    if (form.registrationType === 'JS Registration' && !form.representativeName) {
+      setMsg('Selecione o representante na lista de inscritos.');
+      return;
+    }
     if (!editing && sourceMember && memberCadastroChanged(sourceMember, form)) {
       setMemberPrompt('update');
       return;
@@ -139,9 +166,14 @@ export default function App() {
   }
 
   function edit(r: Registration) {
+    const representativeName =
+      r.representativeName ||
+      fullName(regs.find((x) => x.tis && x.tis === r.representativeTis) || {}) ||
+      '';
     setEditing(r);
     setSourceMember(null);
-    setForm({ ...EMPTY_REGISTRATION, ...r, age: calcAge(r.birthDate) });
+    setForm({ ...EMPTY_REGISTRATION, ...r, age: calcAge(r.birthDate), representativeName });
+    setRepQ(representativeName);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -281,6 +313,7 @@ export default function App() {
             setForm(EMPTY_REGISTRATION);
             setSourceMember(null);
             setQ('');
+            setRepQ('');
           }}
         >
           + Nova pessoa
@@ -333,21 +366,56 @@ export default function App() {
           </label>
           <label>
             Tipo
-            <select value={form.registrationType} onChange={(e) => set('registrationType', e.target.value)}>
+            <select
+              value={form.registrationType}
+              onChange={(e) => {
+                const registrationType = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  registrationType,
+                  ...(registrationType === 'JS Registration'
+                    ? {}
+                    : { representativeTis: '', representativeName: '' }),
+                }));
+                if (registrationType !== 'JS Registration') setRepQ('');
+              }}
+            >
               <option>Participante</option>
               <option>Representative</option>
               <option>JS Registration</option>
             </select>
           </label>
           {form.registrationType === 'JS Registration' && (
-            <label>
-              TIS do representante
-              <input
-                required
-                value={form.representativeTis || ''}
-                onChange={(e) => set('representativeTis', e.target.value)}
-              />
-            </label>
+            <div className="repSearch">
+              <label>
+                Nome do representante
+                <input
+                  required
+                  autoComplete="off"
+                  placeholder="Nome do inscrito"
+                  value={repQ}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setRepQ(value);
+                    if (value.trim() !== (form.representativeName || '').trim()) {
+                      setForm((f) => ({ ...f, representativeName: '', representativeTis: '' }));
+                    }
+                  }}
+                />
+              </label>
+              {foundReps.length > 0 && (
+                <div className="results">
+                  {foundReps.map((r) => (
+                    <button type="button" key={r.row} onClick={() => pickRepresentative(r)}>
+                      <strong>{fullName(r)}</strong>
+                      <small>
+                        TIS {r.tis || '—'} • {r.birthDate || 'sem nascimento'}
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <label>
             Pagamento
@@ -373,6 +441,7 @@ export default function App() {
                 onClick={() => {
                   setEditing(null);
                   setForm(EMPTY_REGISTRATION);
+                  setRepQ('');
                 }}
               >
                 Cancelar

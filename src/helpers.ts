@@ -2,6 +2,10 @@ import { API } from './constants';
 
 export const money = (age: number | null) => (age == null ? null : age <= 6 ? 0 : age <= 17 ? 20 : 50);
 
+export function fullName(p: { givenName?: string; familyName?: string }) {
+  return `${p.givenName || ''} ${p.familyName || ''}`.replace(/\s+/g, ' ').trim();
+}
+
 export const cpfDigits = (v: string) => v.replace(/\D/g, '').slice(0, 11);
 
 export function cpfMask(v: string) {

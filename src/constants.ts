@@ -19,6 +19,7 @@ export const EMPTY_REGISTRATION: Registration = {
   registrationType: 'Participante',
   paid: 'Não pago',
   representativeTis: '',
+  representativeName: '',
 };
 
 export const EMPTY_MEMBER: Member = {

@@ -18,7 +18,7 @@ export const BASE_HEADERS = [
   'RG/RNM/RNE',
 ];
 
-const EXTRA_HEADERS = ['City', 'Registration Type', 'Paid', 'Representative TIS', 'taxa'];
+const EXTRA_HEADERS = ['City', 'Registration Type', 'Paid', 'Representative TIS', 'Representative Name', 'taxa'];
 const ALL = [...BASE_HEADERS, ...EXTRA_HEADERS];
 
 export type SheetRow = {
@@ -38,6 +38,7 @@ export type SheetRow = {
   registrationType: string;
   paid: string;
   representativeTis: string;
+  representativeName: string;
   taxa: number | null;
 };
 
@@ -56,6 +57,7 @@ export type RegistrationBody = {
   registrationType?: string;
   paid?: string;
   representativeTis?: string;
+  representativeName?: string;
 };
 
 function sheets() {
@@ -117,7 +119,8 @@ function obj(row: unknown[], i: number): SheetRow {
     registrationType: val(row[12]),
     paid: val(row[13]),
     representativeTis: documentCell(row[14]),
-    taxa: row[15] === '' || row[15] == null ? null : Number(val(row[15]).replace(/^'/, '')),
+    representativeName: val(row[15]),
+    taxa: row[16] === '' || row[16] == null ? null : Number(val(row[16]).replace(/^'/, '')),
   };
 }
 
@@ -142,7 +145,7 @@ function samePerson(
   return Boolean(nameA && nameB && nameA === nameB && a.birthDate && a.birthDate === b.birthDate);
 }
 
-async function read(tab: string, range = 'A2:P') {
+async function read(tab: string, range = 'A2:Q') {
   const r = await sheets().spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: `'${tab}'!${range}`,
@@ -212,23 +215,62 @@ export async function readRegistrations() {
   return read(REG);
 }
 
+async function inscriptionSheetId() {
+  const meta = await sheets().spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const sh = meta.data.sheets?.find((x) => x.properties?.title === REG);
+  const sheetId = sh?.properties?.sheetId;
+  if (sheetId == null) throw new Error('Aba Inscricoes não encontrada');
+  return sheetId;
+}
+
+async function insertColumn(startIndex: number) {
+  await sheets().spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          insertDimension: {
+            range: { sheetId: await inscriptionSheetId(), dimension: 'COLUMNS', startIndex, endIndex: startIndex + 1 },
+          },
+        },
+      ],
+    },
+  });
+}
+
+async function fillRepresentativeNames() {
+  const rows = await read(REG);
+  const byTis = new Map<string, SheetRow>();
+  for (const row of rows) {
+    if (row.tis) byTis.set(row.tis, row);
+  }
+  const data = rows.flatMap((row) => {
+    if (row.representativeName.trim() || !row.representativeTis) return [];
+    const rep = byTis.get(row.representativeTis);
+    const name = `${rep?.givenName || ''} ${rep?.familyName || ''}`.replace(/\s+/g, ' ').trim();
+    if (!name) return [];
+    return [{ range: `'${REG}'!P${row.row}`, values: [[name]] }];
+  });
+  if (!data.length) return;
+  await sheets().spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { valueInputOption: 'RAW', data },
+  });
+}
+
 export async function ensureHeaders() {
   const s = sheets();
-  const r = await s.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `'${REG}'!A1:P1` });
+  const r = await s.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `'${REG}'!A1:Q1` });
   let h = (r.data.values?.[0] || []).map((cell) => String(cell));
   const stateIndex = h.findIndex((cell) => cell.trim() === 'State');
   if (stateIndex >= 0) {
-    const meta = await s.spreadsheets.get({ spreadsheetId: SHEET_ID });
-    const sh = meta.data.sheets?.find((x) => x.properties?.title === REG);
-    const sheetId = sh?.properties?.sheetId;
-    if (sheetId == null) throw new Error('Aba Inscricoes não encontrada');
     await s.spreadsheets.batchUpdate({
       spreadsheetId: SHEET_ID,
       requestBody: {
         requests: [
           {
             deleteDimension: {
-              range: { sheetId, dimension: 'COLUMNS', startIndex: stateIndex, endIndex: stateIndex + 1 },
+              range: { sheetId: await inscriptionSheetId(), dimension: 'COLUMNS', startIndex: stateIndex, endIndex: stateIndex + 1 },
             },
           },
         ],
@@ -236,12 +278,19 @@ export async function ensureHeaders() {
     });
     h = h.filter((_, index) => index !== stateIndex);
   }
+  if (!h.some((cell) => cell.trim() === 'Representative Name')) {
+    const tisIndex = h.findIndex((cell) => cell.trim() === 'Representative TIS');
+    const taxaIndex = h.findIndex((cell) => cell.trim() === 'taxa');
+    const insertAt = tisIndex >= 0 ? tisIndex + 1 : taxaIndex >= 0 ? taxaIndex : h.length;
+    await insertColumn(insertAt);
+    h.splice(insertAt, 0, 'Representative Name');
+  }
   const needsTaxa = !h.includes('taxa');
   const same = h.length === ALL.length && h.every((cell, index) => cell === ALL[index]);
   if (!same) {
     await s.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
-      range: `'${REG}'!A1:P1`,
+      range: `'${REG}'!A1:Q1`,
       valueInputOption: 'RAW',
       requestBody: { values: [ALL] },
     });
@@ -252,12 +301,14 @@ export async function ensureHeaders() {
       const last = rows[rows.length - 1].row;
       await s.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
-        range: `'${REG}'!P2:P${last}`,
+        range: `'${REG}'!Q2:Q${last}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: rows.map((row) => [feeAmount(row.birthDate)]) },
       });
     }
   }
+  await fillRepresentativeNames();
+  await fillRepresentativeTypes();
   await ensurePersonIds();
 }
 
@@ -308,6 +359,7 @@ export function rowOf(x: RegistrationBody) {
     x.registrationType || 'Participante',
     x.paid || 'Não pago',
     x.representativeTis || '',
+    x.representativeName || '',
     feeAmount(x.birthDate || ''),
   ];
 }
@@ -366,6 +418,53 @@ export async function updateMember(row: number, x: MemberBody) {
   });
 }
 
+function matchRepresentative(all: SheetRow[], name?: string, tis?: string, ignoreRow = 0) {
+  const n = (name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const t = String(tis || '').trim();
+  return all.find((r) => {
+    if (r.row === ignoreRow) return false;
+    const full = `${r.givenName} ${r.familyName}`.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (n && full === n) return true;
+    return Boolean(t && r.tis && r.tis === t);
+  });
+}
+
+export async function findInscribedRepresentative(name?: string, tis?: string, ignoreRow = 0) {
+  return matchRepresentative(await readRegistrations(), name, tis, ignoreRow);
+}
+
+export async function markAsRepresentative(row: number) {
+  if (!row) return;
+  await sheets().spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `'${REG}'!M${row}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [['Representative']] },
+  });
+}
+
+export async function ensureRepresentativeType(rep: { row: number; registrationType?: string }) {
+  if (!rep.row || rep.registrationType === 'Representative') return;
+  await markAsRepresentative(rep.row);
+}
+
+async function fillRepresentativeTypes() {
+  const rows = await read(REG);
+  const seen = new Set<number>();
+  const data = rows.flatMap((row) => {
+    if (row.registrationType !== 'JS Registration') return [];
+    const rep = matchRepresentative(rows, row.representativeName, row.representativeTis, row.row);
+    if (!rep || rep.registrationType === 'Representative' || seen.has(rep.row)) return [];
+    seen.add(rep.row);
+    return [{ range: `'${REG}'!M${rep.row}`, values: [['Representative']] }];
+  });
+  if (!data.length) return;
+  await sheets().spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { valueInputOption: 'RAW', data },
+  });
+}
+
 export async function findDuplicate(x: RegistrationBody, ignoreRow = 0) {
   const all = await readRegistrations();
   return all.find((r) => r.row !== ignoreRow && samePerson(x, r));
@@ -374,7 +473,7 @@ export async function findDuplicate(x: RegistrationBody, ignoreRow = 0) {
 export async function appendRegistration(x: RegistrationBody) {
   await sheets().spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `'${REG}'!A:P`,
+    range: `'${REG}'!A:Q`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [rowForSheet(x)] },
@@ -385,7 +484,7 @@ export async function updateRegistration(row: number, x: RegistrationBody) {
   const existing = (await readRegistrations()).find((r) => r.row === row);
   await sheets().spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `'${REG}'!A${row}:P${row}`,
+    range: `'${REG}'!A${row}:Q${row}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [rowForSheet(x, existing?.id)] },
   });
