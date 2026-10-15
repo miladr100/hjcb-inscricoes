@@ -1,9 +1,61 @@
-import { birthLabel, cpfMask, feeOf, formatFee } from '../helpers';
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { birthLabel, cpfMask, feeOf, formatFee, fullName } from '../helpers';
 import type { Registration } from '../types';
 
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+type PaidFilter = 'all' | 'paid' | 'unpaid';
+type FeeFilter = 'all' | 50 | 20 | 0;
+type TypeFilter = 'all' | 'Participante' | 'Representative' | 'JS Registration';
+
+function parseFeeFilter(value: string): FeeFilter {
+  if (value === '50') return 50;
+  if (value === '20') return 20;
+  if (value === '0') return 0;
+  return 'all';
+}
+
+function typeOf(r: Registration) {
+  return r.registrationType || 'Participante';
+}
+
 export function RegistrationsBoard({ regs }: { regs: Registration[] }) {
+  const [open, setOpen] = useState<Registration | null>(null);
+  const [paidFilter, setPaidFilter] = useState<PaidFilter>('all');
+  const [feeFilter, setFeeFilter] = useState<FeeFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const paidRegs = regs.filter((r) => r.paid === 'Pago');
   const collected = paidRegs.reduce((sum, r) => sum + (feeOf(r) ?? 0), 0);
+  const visible = useMemo(
+    () =>
+      regs.filter((r) => {
+        const paid = r.paid === 'Pago';
+        if (paidFilter === 'paid' && !paid) return false;
+        if (paidFilter === 'unpaid' && paid) return false;
+        if (feeFilter !== 'all' && feeOf(r) !== feeFilter) return false;
+        if (typeFilter !== 'all' && typeOf(r) !== typeFilter) return false;
+        return true;
+      }),
+    [regs, paidFilter, feeFilter, typeFilter],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
   return (
     <>
@@ -25,70 +77,115 @@ export function RegistrationsBoard({ regs }: { regs: Registration[] }) {
           <span>Arrecadado</span>
         </div>
       </section>
+      <div className="filterGroups">
+        <div className="filterSelects">
+          <label>
+            Pagamento
+            <select
+              value={paidFilter}
+              aria-label="Filtro de pagamento"
+              onChange={(e) => setPaidFilter(e.target.value as PaidFilter)}
+            >
+              <option value="all">Todos</option>
+              <option value="paid">Pagos</option>
+              <option value="unpaid">Não pagos</option>
+            </select>
+          </label>
+          <label>
+            Taxa
+            <select value={String(feeFilter)} aria-label="Filtro de taxa" onChange={(e) => setFeeFilter(parseFeeFilter(e.target.value))}>
+              <option value="all">Todas as taxas</option>
+              <option value="50">R$ 50</option>
+              <option value="20">R$ 20</option>
+              <option value="0">Isento</option>
+            </select>
+          </label>
+          <label>
+            Tipo
+            <select
+              value={typeFilter}
+              aria-label="Filtro de tipo"
+              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+            >
+              <option value="all">Todos os tipos</option>
+              <option value="Participante">Participante</option>
+              <option value="Representative">Representative</option>
+              <option value="JS Registration">JS Registration</option>
+            </select>
+          </label>
+        </div>
+      </div>
       <section className="cardsList">
         {regs.length === 0 && <p className="empty">Nenhuma inscrição ainda.</p>}
-        {regs.map((r) => (
-          <article className="personCard" key={r.row}>
-            <h3>
-              {r.givenName} {r.familyName}
-            </h3>
-            <dl>
-              <div>
-                <dt>TIS</dt>
-                <dd>{r.tis || '—'}</dd>
-              </div>
-              <div>
-                <dt>Nascimento</dt>
-                <dd>{birthLabel(r.birthDate)}</dd>
-              </div>
-              <div>
-                <dt>Idade</dt>
-                <dd>{r.age ?? '—'}</dd>
-              </div>
-              <div>
-                <dt>CPF</dt>
-                <dd>{r.cpf ? cpfMask(r.cpf) : '—'}</dd>
-              </div>
-              <div>
-                <dt>RG / RNM / RNE</dt>
-                <dd>{r.document || '—'}</dd>
-              </div>
-              <div>
-                <dt>Cidade</dt>
-                <dd>{r.city || '—'}</dd>
-              </div>
-              <div>
-                <dt>Bênção</dt>
-                <dd>{r.blessing || '—'}</dd>
-              </div>
-              <div>
-                <dt>Tipo</dt>
-                <dd>{r.registrationType || 'Participante'}</dd>
-              </div>
-              {r.registrationType === 'JS Registration' && (
-                <>
-                  <div>
-                    <dt>Representante</dt>
-                    <dd>{r.representativeName || '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>TIS do representante</dt>
-                    <dd>{r.representativeTis || '—'}</dd>
-                  </div>
-                </>
-              )}
-              <div>
-                <dt>Pagamento</dt>
-                <dd>{r.paid || 'Não pago'}</dd>
-              </div>
-              <div>
-                <dt>Taxa</dt>
-                <dd>{formatFee(feeOf(r))}</dd>
-              </div>
-            </dl>
-          </article>
+        {regs.length > 0 && visible.length === 0 && <p className="empty">Nenhum inscrito neste filtro.</p>}
+        {visible.map((r) => (
+          <button type="button" className="regCard" key={r.row} onClick={() => setOpen(r)}>
+            <h3>{fullName(r)}</h3>
+            <div className="regMeta">
+              <span>
+                <small>TIS</small>
+                {r.tis || '—'}
+              </span>
+              <span>
+                <small>Nascimento</small>
+                {birthLabel(r.birthDate)}
+              </span>
+              <span>
+                <small>Idade</small>
+                {r.age ?? '—'}
+              </span>
+              <span>
+                <small>Bênção</small>
+                {r.blessing || '—'}
+              </span>
+              <span>
+                <small>Tipo</small>
+                {r.registrationType || 'Participante'}
+              </span>
+              <span>
+                <small>Taxa</small>
+                {formatFee(feeOf(r))}
+              </span>
+            </div>
+          </button>
         ))}
       </section>
+      {open && (
+        <div
+          className="dialogBackdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reg-detail-title"
+          onClick={() => setOpen(null)}
+        >
+          <div className="dialog" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="dialogClose" aria-label="Fechar" onClick={() => setOpen(null)}>
+              ×
+            </button>
+            <h2 id="reg-detail-title">{fullName(open)}</h2>
+            <dl className="regDetail">
+              <Detail label="TIS" value={open.tis || '—'} />
+              <Detail label="Nascimento" value={birthLabel(open.birthDate)} />
+              <Detail label="Idade" value={String(open.age ?? '—')} />
+              <Detail label="CPF" value={open.cpf ? cpfMask(open.cpf) : '—'} />
+              <Detail label="RG / RNM / RNE" value={open.document || '—'} />
+              <Detail label="Cidade" value={open.city || '—'} />
+              <Detail label="País" value={open.country || '—'} />
+              <Detail label="Grupo" value={open.group || '—'} />
+              <Detail label="Bênção" value={open.blessing || '—'} />
+              <Detail label="Tipo" value={open.registrationType || 'Participante'} />
+              {open.registrationType === 'JS Registration' && (
+                <>
+                  <Detail label="Representante" value={open.representativeName || '—'} />
+                  <Detail label="TIS do representante" value={open.representativeTis || '—'} />
+                </>
+              )}
+              <Detail label="Pagamento" value={open.paid || 'Não pago'} />
+              <Detail label="Taxa" value={formatFee(feeOf(open))} />
+            </dl>
+          </div>
+        </div>
+      )}
     </>
   );
 }

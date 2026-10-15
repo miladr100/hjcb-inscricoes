@@ -2,14 +2,19 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { InstallPrompt } from './InstallPrompt';
+import { ThemeToggle } from './ThemeToggle';
 import { MembersBoard } from './MembersBoard';
 import { RegistrationsBoard } from './RegistrationsBoard';
 import { EMPTY_REGISTRATION } from '../constants';
 import { calcAge, cpfDigits, cpfMask, feeOf, formatFee, fullName, memberCadastroChanged, money, req, validCpf } from '../helpers';
 import type { Member, Registration } from '../types';
 
+const TABLE_PAGE_SIZE = 15;
+
 export default function App() {
   const [auth, setAuth] = useState<boolean | null>(null);
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [password, setPassword] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
   const [regs, setRegs] = useState<Registration[]>([]);
@@ -19,6 +24,7 @@ export default function App() {
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<'form' | 'cards' | 'members'>('form');
+  const [tablePage, setTablePage] = useState(0);
   const [sourceMember, setSourceMember] = useState<Member | null>(null);
   const [memberPrompt, setMemberPrompt] = useState<'update' | 'create' | null>(null);
 
@@ -30,11 +36,21 @@ export default function App() {
     setRegs(r);
   };
 
+  async function boot() {
+    try {
+      setLoadError('');
+      await load();
+      setReady(true);
+    } catch (error: any) {
+      setLoadError(error.message || 'Não foi possível carregar os dados.');
+    }
+  }
+
   useEffect(() => {
     req('/session')
       .then(() => {
         setAuth(true);
-        load();
+        boot();
       })
       .catch(() => setAuth(false));
   }, []);
@@ -67,6 +83,14 @@ export default function App() {
       })
       .slice(0, 12);
   }, [repQ, regs, form.registrationType, form.representativeName, form.id, editing]);
+
+  const tableRegs = useMemo(() => [...regs].sort((a, b) => b.row - a.row), [regs]);
+  const tablePageCount = Math.max(1, Math.ceil(tableRegs.length / TABLE_PAGE_SIZE));
+  const visibleRegs = tableRegs.slice(tablePage * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE);
+
+  useEffect(() => {
+    if (tablePage > tablePageCount - 1) setTablePage(Math.max(0, tablePageCount - 1));
+  }, [tablePage, tablePageCount]);
 
   const fee = money(form.age);
 
@@ -134,6 +158,7 @@ export default function App() {
       setSourceMember(null);
       setForm(EMPTY_REGISTRATION);
       setRepQ('');
+      setTablePage(0);
       await load();
     } catch (e: any) {
       setMsg(e.message);
@@ -183,11 +208,24 @@ export default function App() {
     await load();
   }
 
-  if (auth === null) {
+  if (auth === null || (auth && !ready)) {
     return (
       <>
         <InstallPrompt />
-        <main className="center">Carregando…</main>
+        <main className="center">
+          <div className="pageLoading">
+            {!loadError && <span className="spinner" aria-hidden="true" />}
+            <p>{loadError ? 'Não foi possível carregar os dados.' : 'Carregando dados…'}</p>
+            {loadError && (
+              <>
+                <p className="error">{loadError}</p>
+                <button type="button" onClick={boot}>
+                  Tentar de novo
+                </button>
+              </>
+            )}
+          </div>
+        </main>
       </>
     );
   }
@@ -206,7 +244,7 @@ export default function App() {
               try {
                 await req('/login', { method: 'POST', body: JSON.stringify({ password }) });
                 setAuth(true);
-                load();
+                await boot();
               } catch {
                 setMsg('Senha incorreta');
               }
@@ -236,15 +274,21 @@ export default function App() {
           <h1>Grandes Obras HJCB</h1>
           <small>Inscrições • Outubro 2026</small>
         </div>
-        <button
-          className="ghost"
-          onClick={async () => {
-            await req('/logout', { method: 'POST' });
-            setAuth(false);
-          }}
-        >
-          Sair
-        </button>
+        <div className="headerActions">
+          <ThemeToggle />
+          <button
+            className="ghost"
+            onClick={async () => {
+              await req('/logout', { method: 'POST' });
+              setAuth(false);
+              setReady(false);
+              setMembers([]);
+              setRegs([]);
+            }}
+          >
+            Sair
+          </button>
+        </div>
       </header>
       <nav className="tabs" aria-label="Seções">
         <button type="button" className={tab === 'form' ? 'active' : undefined} onClick={() => setTab('form')}>
@@ -477,7 +521,7 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {regs.map((r) => (
+              {visibleRegs.map((r) => (
                 <tr key={r.row}>
                   <td>
                     {r.givenName} {r.familyName}
@@ -500,6 +544,37 @@ export default function App() {
             </tbody>
           </table>
         </div>
+        {tableRegs.length > 0 && (
+          <div className="pager">
+            <small>
+              {tablePage * TABLE_PAGE_SIZE + 1}–{Math.min(tableRegs.length, tablePage * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE)} de{' '}
+              {tableRegs.length}
+            </small>
+            <nav aria-label="Páginas da tabela de inscrições">
+              <button type="button" className="ghost" disabled={tablePage === 0} onClick={() => setTablePage((p) => p - 1)}>
+                Anterior
+              </button>
+              {Array.from({ length: tablePageCount }, (_, i) => (
+                <button
+                  type="button"
+                  key={i}
+                  className={i === tablePage ? 'active' : 'ghost'}
+                  onClick={() => setTablePage(i)}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="ghost"
+                disabled={tablePage >= tablePageCount - 1}
+                onClick={() => setTablePage((p) => p + 1)}
+              >
+                Próxima
+              </button>
+            </nav>
+          </div>
+        )}
       </section>
       </>
       )}
