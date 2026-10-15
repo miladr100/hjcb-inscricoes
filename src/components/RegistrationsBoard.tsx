@@ -28,13 +28,17 @@ function typeOf(r: Registration) {
   return r.registrationType || 'Participante';
 }
 
-export function RegistrationsBoard({ regs }: { regs: Registration[] }) {
+export function RegistrationsBoard({ regs, goal }: { regs: Registration[]; goal: number }) {
   const [open, setOpen] = useState<Registration | null>(null);
   const [paidFilter, setPaidFilter] = useState<PaidFilter>('all');
   const [feeFilter, setFeeFilter] = useState<FeeFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [nameQuery, setNameQuery] = useState('');
   const paidRegs = regs.filter((r) => r.paid === 'Pago');
   const collected = paidRegs.reduce((sum, r) => sum + (feeOf(r) ?? 0), 0);
+  const safeGoal = goal >= 1 ? goal : 1;
+  const reachedPct = Math.round((regs.length / safeGoal) * 100);
+  const remaining = Math.max(0, safeGoal - regs.length);
   const visible = useMemo(
     () =>
       regs.filter((r) => {
@@ -43,9 +47,11 @@ export function RegistrationsBoard({ regs }: { regs: Registration[] }) {
         if (paidFilter === 'unpaid' && paid) return false;
         if (feeFilter !== 'all' && feeOf(r) !== feeFilter) return false;
         if (typeFilter !== 'all' && typeOf(r) !== typeFilter) return false;
+        const q = nameQuery.trim().toLowerCase();
+        if (q && !fullName(r).toLowerCase().includes(q)) return false;
         return true;
       }),
-    [regs, paidFilter, feeFilter, typeFilter],
+    [regs, paidFilter, feeFilter, typeFilter, nameQuery],
   );
 
   useEffect(() => {
@@ -77,7 +83,31 @@ export function RegistrationsBoard({ regs }: { regs: Registration[] }) {
           <span>Arrecadado</span>
         </div>
       </section>
+      <section className="stats">
+        <div>
+          <b>{safeGoal}</b>
+          <span>Meta</span>
+        </div>
+        <div>
+          <b>{`${reachedPct}%`}</b>
+          <span>Alcançado</span>
+        </div>
+        <div>
+          <b>{remaining}</b>
+          <span>Faltam</span>
+        </div>
+      </section>
       <div className="filterGroups">
+        <label className="filterSearch">
+          Buscar por nome
+          <input
+            type="search"
+            value={nameQuery}
+            placeholder="Nome ou sobrenome"
+            aria-label="Filtro por nome"
+            onChange={(e) => setNameQuery(e.target.value)}
+          />
+        </label>
         <div className="filterSelects">
           <label>
             Pagamento

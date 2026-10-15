@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from 'react';
 import { EMPTY_MEMBER } from '../constants';
-import { birthLabel, calcAge, cpfDigits, cpfMask, isMemberInscribed, req, validCpf } from '../helpers';
+import { birthLabel, calcAge, cpfDigits, cpfMask, fullName, isMemberInscribed, req, validCpf } from '../helpers';
 import type { Member, Registration } from '../types';
 
 export function MembersBoard({
@@ -21,6 +21,7 @@ export function MembersBoard({
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'inscribed' | 'not'>('all');
+  const [nameQuery, setNameQuery] = useState('');
 
   const blessings = useMemo(
     () =>
@@ -36,13 +37,15 @@ export function MembersBoard({
   );
 
   const visible = useMemo(() => {
+    const q = nameQuery.trim().toLowerCase();
     return members.filter((m) => {
       const inscribed = isMemberInscribed(m, regs);
-      if (statusFilter === 'inscribed') return inscribed;
-      if (statusFilter === 'not') return !inscribed;
+      if (statusFilter === 'inscribed' && !inscribed) return false;
+      if (statusFilter === 'not' && inscribed) return false;
+      if (q && !fullName(m).toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [members, regs, statusFilter]);
+  }, [members, regs, statusFilter, nameQuery]);
 
   const set = (k: keyof Member, v: string) =>
     setForm((f) => ({ ...f, [k]: v, ...(k === 'birthDate' ? { age: calcAge(v) } : {}) }));
@@ -91,21 +94,33 @@ export function MembersBoard({
           <span>Não inscritos</span>
         </div>
       </section>
-      <nav className="filters" aria-label="Filtro de inscrição">
-        <button type="button" className={statusFilter === 'all' ? 'active' : undefined} onClick={() => setStatusFilter('all')}>
-          Todos
-        </button>
-        <button
-          type="button"
-          className={statusFilter === 'inscribed' ? 'active' : undefined}
-          onClick={() => setStatusFilter('inscribed')}
-        >
-          Inscritos
-        </button>
-        <button type="button" className={statusFilter === 'not' ? 'active' : undefined} onClick={() => setStatusFilter('not')}>
-          Não inscritos
-        </button>
-      </nav>
+      <div className="filterGroups">
+        <label className="filterSearch">
+          Buscar por nome
+          <input
+            type="search"
+            value={nameQuery}
+            placeholder="Nome ou sobrenome"
+            aria-label="Filtro por nome"
+            onChange={(e) => setNameQuery(e.target.value)}
+          />
+        </label>
+        <nav className="filters" aria-label="Filtro de inscrição">
+          <button type="button" className={statusFilter === 'all' ? 'active' : undefined} onClick={() => setStatusFilter('all')}>
+            Todos
+          </button>
+          <button
+            type="button"
+            className={statusFilter === 'inscribed' ? 'active' : undefined}
+            onClick={() => setStatusFilter('inscribed')}
+          >
+            Inscritos
+          </button>
+          <button type="button" className={statusFilter === 'not' ? 'active' : undefined} onClick={() => setStatusFilter('not')}>
+            Não inscritos
+          </button>
+        </nav>
+      </div>
       <div className="titleRow">
         <h2>Cadastro de Membros</h2>
         {open ? (
@@ -187,7 +202,13 @@ export function MembersBoard({
         {members.length === 0 && <p className="empty">Nenhum membro cadastrado.</p>}
         {members.length > 0 && visible.length === 0 && (
           <p className="empty">
-            {statusFilter === 'inscribed' ? 'Nenhum membro inscrito.' : 'Nenhum membro sem inscrição.'}
+            {nameQuery.trim()
+              ? 'Nenhum membro neste filtro.'
+              : statusFilter === 'inscribed'
+                ? 'Nenhum membro inscrito.'
+                : statusFilter === 'not'
+                  ? 'Nenhum membro sem inscrição.'
+                  : 'Nenhum membro neste filtro.'}
           </p>
         )}
         {visible.map((m) => {

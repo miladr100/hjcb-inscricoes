@@ -144,6 +144,38 @@ header {
   gap: 8px;
 }
 
+.iconButton {
+  background: var(--bg-muted);
+  color: var(--text-heading);
+  padding: 8px;
+  line-height: 0;
+  border-radius: 10px;
+}
+
+.iconButton svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.settingsField {
+  margin-bottom: 14px;
+}
+
+.settingsTheme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 18px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.settingsLogout {
+  width: 100%;
+}
+
 .themeSwitch {
   display: flex;
   align-items: center;
@@ -303,6 +335,10 @@ header small {
   margin: 0;
 }
 
+.filterSearch input {
+  width: 100%;
+}
+
 .filterSelects {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -344,6 +380,10 @@ header small {
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.stats + .stats {
+  margin-top: -6px;
 }
 
 .stats-1 {

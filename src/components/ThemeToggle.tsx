@@ -8,14 +8,19 @@ function isDark() {
   return document.documentElement.dataset.theme === 'dark';
 }
 
+export function applyStoredTheme() {
+  if (typeof document === 'undefined') return false;
+  const stored = localStorage.getItem(KEY);
+  const next = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = next ? 'dark' : 'light';
+  return next;
+}
+
 export function ThemeToggle() {
   const [dark, setDark] = useState(false);
 
   useLayoutEffect(() => {
-    const stored = localStorage.getItem(KEY);
-    const next = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.dataset.theme = next ? 'dark' : 'light';
-    setDark(next);
+    setDark(applyStoredTheme());
   }, []);
 
   function toggle() {

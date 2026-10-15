@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent } from 'react';
 import { InstallPrompt } from './InstallPrompt';
-import { ThemeToggle } from './ThemeToggle';
+import { SettingsModal } from './SettingsModal';
+import { applyStoredTheme } from './ThemeToggle';
 import { MembersBoard } from './MembersBoard';
 import { RegistrationsBoard } from './RegistrationsBoard';
 import { EMPTY_REGISTRATION } from '../constants';
+import { DEFAULT_EVENT, readEventSettings, writeEventSettings, type EventSettings } from '../eventSettings';
 import { calcAge, cpfDigits, cpfMask, feeOf, formatFee, fullName, memberCadastroChanged, money, req, validCpf } from '../helpers';
 import type { Member, Registration } from '../types';
 
@@ -27,8 +29,32 @@ export default function App() {
   const [tablePage, setTablePage] = useState(0);
   const [sourceMember, setSourceMember] = useState<Member | null>(null);
   const [memberPrompt, setMemberPrompt] = useState<'update' | 'create' | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [event, setEvent] = useState<EventSettings>(DEFAULT_EVENT);
 
   const [form, setForm] = useState<Registration>(EMPTY_REGISTRATION);
+
+  useLayoutEffect(() => {
+    applyStoredTheme();
+    setEvent(readEventSettings());
+  }, []);
+
+  useEffect(() => {
+    document.title = event.title;
+  }, [event.title]);
+
+  function saveEvent(next: EventSettings) {
+    setEvent(writeEventSettings(next));
+  }
+
+  async function logout() {
+    await req('/logout', { method: 'POST' });
+    setSettingsOpen(false);
+    setAuth(false);
+    setReady(false);
+    setMembers([]);
+    setRegs([]);
+  }
 
   const load = async () => {
     const [m, r] = await Promise.all([req('/members'), req('/registrations')]);
@@ -236,8 +262,8 @@ export default function App() {
         <InstallPrompt />
         <main className="login">
         <div className="card">
-          <h1>Grandes Obras HJCB</h1>
-          <p>23–25 de outubro de 2026</p>
+          <h1>{event.title}</h1>
+          <p>{event.date}</p>
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -271,24 +297,17 @@ export default function App() {
       <main>
       <header>
         <div>
-          <h1>Grandes Obras HJCB</h1>
-          <small>Inscrições • Outubro 2026</small>
+          <h1>{event.title}</h1>
+          <small>Inscrições • {event.date}</small>
         </div>
-        <div className="headerActions">
-          <ThemeToggle />
-          <button
-            className="ghost"
-            onClick={async () => {
-              await req('/logout', { method: 'POST' });
-              setAuth(false);
-              setReady(false);
-              setMembers([]);
-              setRegs([]);
-            }}
-          >
-            Sair
-          </button>
-        </div>
+        <button type="button" className="iconButton" aria-label="Configurações" onClick={() => setSettingsOpen(true)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M19.1 12.9a7.5 7.5 0 0 0 .1-.9 7.5 7.5 0 0 0-.1-.9l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7 7 0 0 0-1.5-.9l-.4-2.5a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.5a7 7 0 0 0-1.5.9l-2.4-1a.5.5 0 0 0-.6.2L2.7 9.9a.5.5 0 0 0 .1.6l2 1.6a7.5 7.5 0 0 0-.1.9 7.5 7.5 0 0 0 .1.9l-2 1.6a.5.5 0 0 0-.1.6l1.9 3.3a.5.5 0 0 0 .6.2l2.4-1a7 7 0 0 0 1.5.9l.4 2.5a.5.5 0 0 0 .5.4h3.8a.5.5 0 0 0 .5-.4l.4-2.5a7 7 0 0 0 1.5-.9l2.4 1a.5.5 0 0 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6zm-7.1 2.6A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"
+            />
+          </svg>
+        </button>
       </header>
       <nav className="tabs" aria-label="Seções">
         <button type="button" className={tab === 'form' ? 'active' : undefined} onClick={() => setTab('form')}>
@@ -302,7 +321,7 @@ export default function App() {
         </button>
       </nav>
       {tab === 'cards' ? (
-        <RegistrationsBoard regs={regs} />
+        <RegistrationsBoard regs={regs} goal={event.goal} />
       ) : tab === 'members' ? (
         <MembersBoard
           members={members}
@@ -579,6 +598,9 @@ export default function App() {
       </>
       )}
       </main>
+      {settingsOpen && (
+        <SettingsModal event={event} onEventChange={saveEvent} onClose={() => setSettingsOpen(false)} onLogout={logout} />
+      )}
       {memberPrompt && (
         <div
           className="dialogBackdrop"
