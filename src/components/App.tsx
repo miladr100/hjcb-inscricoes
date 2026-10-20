@@ -12,6 +12,7 @@ import { calcAge, cpfDigits, cpfMask, feeOf, formatFee, fullName, memberCadastro
 import type { Member, Registration } from '../types';
 
 const TABLE_PAGE_SIZE = 15;
+const TYPE_SHORT: Record<string, string> = { Participante: 'P', 'JS Registration': 'JS', Representative: 'R' };
 
 export default function App() {
   const [auth, setAuth] = useState<boolean | null>(null);
@@ -28,6 +29,9 @@ export default function App() {
   const [tab, setTab] = useState<'form' | 'cards' | 'members'>('form');
   const [tablePage, setTablePage] = useState(0);
   const [tableQuery, setTableQuery] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [sourceMember, setSourceMember] = useState<Member | null>(null);
   const [memberPrompt, setMemberPrompt] = useState<'update' | 'create' | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -123,6 +127,58 @@ export default function App() {
   useEffect(() => {
     if (tablePage > tablePageCount - 1) setTablePage(Math.max(0, tablePageCount - 1));
   }, [tablePage, tablePageCount]);
+
+  const selectedRegs = useMemo(() => regs.filter((r) => r.id && selected.has(r.id)), [regs, selected]);
+  const selectableVisible = visibleRegs.filter((r) => r.id);
+  const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every((r) => selected.has(r.id!));
+
+  function toggleSelected(id: string) {
+    setBulkMsg(null);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of selectableVisible) {
+        if (allVisibleSelected) next.delete(r.id!);
+        else next.add(r.id!);
+      }
+      return next;
+    });
+  }
+
+  async function runBulk(action: 'delete' | 'markPaid') {
+    const ids = selectedRegs.map((r) => r.id!);
+    if (!ids.length || bulkBusy) return;
+    if (action === 'delete' && !confirm(`Excluir ${ids.length} inscrição(ões) selecionada(s)?`)) return;
+    setBulkBusy(true);
+    setBulkMsg(null);
+    try {
+      const { count } = await req('/registrations/bulk', { method: 'POST', body: JSON.stringify({ action, ids }) });
+      setSelected(new Set());
+      if (editing && ids.includes(editing.id || '')) {
+        setEditing(null);
+        setSourceMember(null);
+        setForm(EMPTY_REGISTRATION);
+        setRepQ('');
+      }
+      await load();
+      setBulkMsg({
+        ok: true,
+        text: action === 'delete' ? `${count} inscrição(ões) excluída(s).` : `${count} inscrição(ões) marcada(s) como paga(s).`,
+      });
+    } catch (e: any) {
+      setBulkMsg({ ok: false, text: e.message });
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   const fee = money(form.age);
   const exempt = fee === 0;
@@ -554,38 +610,105 @@ export default function App() {
             }}
           />
         </label>
+        {selectedRegs.length > 0 && (
+          <div className="bulkBar">
+            <span>{selectedRegs.length} selecionada(s)</span>
+            <button type="button" disabled={bulkBusy} onClick={() => runBulk('markPaid')}>
+              Adicionar pago
+            </button>
+            <button type="button" className="dangerButton" disabled={bulkBusy} onClick={() => runBulk('delete')}>
+              Deletar
+            </button>
+            <button type="button" className="ghost" disabled={bulkBusy} onClick={() => setSelected(new Set())}>
+              Limpar seleção
+            </button>
+          </div>
+        )}
+        {bulkMsg && <p className={bulkMsg.ok ? 'success' : 'error'}>{bulkMsg.text}</p>}
         {regs.length > 0 && tableRegs.length === 0 && <p className="empty">Nenhuma inscrição com este nome.</p>}
         <div className="tableWrap">
           <table>
             <thead>
               <tr>
+                <th className="selectCell">
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar todas desta página"
+                    checked={allVisibleSelected}
+                    disabled={!selectableVisible.length}
+                    onChange={toggleAllVisible}
+                  />
+                </th>
                 <th>Nome</th>
-                <th>TIS</th>
                 <th>Bênção</th>
-                <th>Tipo</th>
-                <th>Pagamento</th>
+                <th title="P = Participante, JS = JS Registration, R = Representative">Tipo</th>
+                <th title="Pagamento">Pag.</th>
                 <th>Taxa</th>
-                <th></th>
+                <th>
+                  <span className="srOnly">Ações</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {visibleRegs.map((r) => (
-                <tr key={r.row}>
-                  <td>
+                <tr key={r.row} className={r.id && selected.has(r.id) ? 'is-selected' : undefined}>
+                  <td className="selectCell">
+                    <input
+                      type="checkbox"
+                      aria-label={`Selecionar ${fullName(r)}`}
+                      checked={!!r.id && selected.has(r.id)}
+                      disabled={!r.id}
+                      onChange={() => r.id && toggleSelected(r.id)}
+                    />
+                  </td>
+                  <td className="nameCell" title={fullName(r)}>
                     {r.givenName} {r.familyName}
                   </td>
-                  <td>{r.tis}</td>
-                  <td>{r.blessing}</td>
-                  <td>{r.registrationType || 'Participante'}</td>
-                  <td>{r.paid || 'Não pago'}</td>
-                  <td>{formatFee(feeOf(r))}</td>
+                  <td className="wrapCell">{r.blessing}</td>
+                  <td title={r.registrationType || 'Participante'}>{TYPE_SHORT[r.registrationType || 'Participante'] || 'P'}</td>
                   <td>
-                    <button className="mini" onClick={() => edit(r)}>
-                      Editar
-                    </button>{' '}
-                    <button className="mini danger" onClick={() => del(r)}>
-                      Excluir
-                    </button>
+                    {r.paid === 'Pago' ? (
+                      <span className="paidMark is-paid" role="img" aria-label="Pago" title="Pago">
+                        ✓
+                      </span>
+                    ) : (
+                      <span className="paidMark is-unpaid" role="img" aria-label="Não pago" title="Não pago">
+                        ✗
+                      </span>
+                    )}
+                  </td>
+                  <td>{formatFee(feeOf(r)).replace(',00', '')}</td>
+                  <td>
+                    <div className="rowActions">
+                      <button
+                        type="button"
+                        className="mini iconAction"
+                        aria-label={`Editar ${fullName(r)}`}
+                        title="Editar"
+                        onClick={() => edit(r)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zm17.7-10.2a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="mini danger iconAction"
+                        aria-label={`Excluir ${fullName(r)}`}
+                        title="Excluir"
+                        onClick={() => del(r)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

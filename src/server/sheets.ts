@@ -514,6 +514,43 @@ export async function deleteRegistration(row: number) {
   });
 }
 
+async function registrationsByIds(ids: string[]) {
+  const wanted = new Set(ids.map((id) => String(id || '').trim()).filter(Boolean));
+  if (!wanted.size) return [];
+  return (await readRegistrations()).filter((r) => wanted.has((r.id || '').trim()));
+}
+
+export async function deleteRegistrations(ids: string[]) {
+  const rows = (await registrationsByIds(ids)).map((r) => r.row).sort((a, b) => b - a);
+  if (!rows.length) return 0;
+  const sheetId = await inscriptionSheetId();
+  await sheets().spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: rows.map((row) => ({
+        deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } },
+      })),
+    },
+  });
+  return rows.length;
+}
+
+export async function markRegistrationsPaid(ids: string[]) {
+  const targets = await registrationsByIds(ids);
+  if (!targets.length) return 0;
+  await sheets().spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      valueInputOption: 'USER_ENTERED',
+      data: targets.map((r) => ({
+        range: `'${REG}'!A${r.row}:Q${r.row}`,
+        values: [rowForSheet({ ...r, paid: 'Pago' }, r.id)],
+      })),
+    },
+  });
+  return targets.length;
+}
+
 export async function exportCsv() {
   const rows = await readRegistrations();
   rows.sort((a, b) => (a.representativeTis || a.tis).localeCompare(b.representativeTis || b.tis));

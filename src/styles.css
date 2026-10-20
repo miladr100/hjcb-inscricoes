@@ -344,6 +344,129 @@ header small {
   margin: 12px 0;
 }
 
+.bulkBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-muted);
+}
+
+.bulkBar span {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.bulkBar button {
+  padding: 8px 12px;
+}
+
+.bulkBar .ghost {
+  background: transparent;
+}
+
+.dangerButton {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.bulkBar button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.selectCell {
+  width: 1%;
+}
+
+.selectCell input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+
+tr.is-selected td {
+  background: var(--bg-muted);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.paidMark {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.paidMark.is-paid {
+  color: var(--success);
+}
+
+.paidMark.is-unpaid {
+  color: var(--danger);
+}
+
+.rowActions {
+  display: flex;
+  gap: 4px;
+}
+
+.iconAction {
+  display: inline-flex;
+  padding: 6px;
+}
+
+.iconAction svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (max-width: 650px) {
+  .tableWrap th,
+  .tableWrap td {
+    padding: 8px 3px;
+    font-size: 13px;
+  }
+
+  .tableWrap .nameCell {
+    max-width: 82px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tableWrap .wrapCell {
+    white-space: normal;
+  }
+
+  .tableWrap .selectCell input {
+    width: 16px;
+    height: 16px;
+  }
+
+  .rowActions {
+    gap: 0;
+  }
+
+  .iconAction {
+    padding: 4px;
+  }
+
+  .iconAction svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 .filterSelects {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
