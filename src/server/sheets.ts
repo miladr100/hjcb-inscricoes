@@ -58,6 +58,7 @@ export type RegistrationBody = {
   paid?: string;
   representativeTis?: string;
   representativeName?: string;
+  taxa?: number | string | null;
 };
 
 function sheets() {
@@ -360,8 +361,14 @@ export function rowOf(x: RegistrationBody) {
     x.paid || 'Não pago',
     x.representativeTis || '',
     x.representativeName || '',
-    feeAmount(x.birthDate || ''),
+    manualFee(x.taxa) ?? feeAmount(x.birthDate || ''),
   ];
+}
+
+function manualFee(value: RegistrationBody['taxa']) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 export type MemberBody = {

@@ -31,6 +31,7 @@ export default function App() {
   const [tableQuery, setTableQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [feeDraft, setFeeDraft] = useState<string | null>(null);
   const [bulkMsg, setBulkMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [sourceMember, setSourceMember] = useState<Member | null>(null);
   const [memberPrompt, setMemberPrompt] = useState<'update' | 'create' | null>(null);
@@ -166,6 +167,7 @@ export default function App() {
         setEditing(null);
         setSourceMember(null);
         setForm(EMPTY_REGISTRATION);
+        setFeeDraft(null);
         setRepQ('');
       }
       await load();
@@ -180,10 +182,13 @@ export default function App() {
     }
   }
 
-  const fee = money(form.age);
+  const calculatedFee = money(form.age);
+  const manualFee = feeDraft !== null && feeDraft.trim() !== '' && Number(feeDraft) >= 0 ? Number(feeDraft) : null;
+  const fee = feeDraft !== null ? manualFee : calculatedFee;
   const exempt = fee === 0;
 
   const pick = (m: Member) => {
+    setFeeDraft(null);
     setForm({
       ...EMPTY_REGISTRATION,
       ...m,
@@ -229,6 +234,7 @@ export default function App() {
       const payload = {
         ...form,
         paid: exempt ? 'Pago' : form.paid,
+        taxa: manualFee,
         cpf: cpfDigits(form.cpf),
         id: form.id || crypto.randomUUID(),
       };
@@ -252,6 +258,7 @@ export default function App() {
       setEditing(null);
       setSourceMember(null);
       setForm(EMPTY_REGISTRATION);
+      setFeeDraft(null);
       setRepQ('');
       setTablePage(0);
       await load();
@@ -274,6 +281,10 @@ export default function App() {
       setMsg('Selecione o representante na lista de inscritos.');
       return;
     }
+    if (feeDraft !== null && manualFee === null) {
+      setMsg('Informe um valor de taxa válido ou volte para a taxa calculada.');
+      return;
+    }
     if (sourceMember && memberCadastroChanged(sourceMember, form)) {
       setMemberPrompt('update');
       return;
@@ -294,6 +305,8 @@ export default function App() {
     setEditing(r);
     setSourceMember((id && members.find((m) => (m.id || '').trim() === id)) || null);
     setForm({ ...EMPTY_REGISTRATION, ...r, age: calcAge(r.birthDate), representativeName });
+    const stored = r.taxa != null && !Number.isNaN(Number(r.taxa)) ? Number(r.taxa) : null;
+    setFeeDraft(stored !== null && stored !== money(calcAge(r.birthDate)) ? String(stored) : null);
     setRepQ(representativeName);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -444,6 +457,7 @@ export default function App() {
           className="link"
           onClick={() => {
             setForm(EMPTY_REGISTRATION);
+            setFeeDraft(null);
             setSourceMember(null);
             setQ('');
             setRepQ('');
@@ -558,9 +572,51 @@ export default function App() {
             </select>
           </label>
           <div className="fee">
-            <span>Taxa calculada</span>
-            <b>{fee === null ? '—' : fee === 0 ? 'Isento' : `R$ ${fee},00`}</b>
-            <small>Este valor é gravado na coluna taxa.</small>
+            <div className="feeHead">
+              <span>{feeDraft === null ? 'Taxa calculada' : 'Taxa manual'}</span>
+              {feeDraft === null ? (
+                <button
+                  type="button"
+                  className="mini iconAction"
+                  aria-label="Editar taxa manualmente"
+                  title="Editar taxa"
+                  onClick={() => setFeeDraft(String(calculatedFee ?? ''))}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="currentColor"
+                      d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zm17.7-10.2a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                    />
+                  </svg>
+                </button>
+              ) : (
+                <button type="button" className="mini" onClick={() => setFeeDraft(null)}>
+                  Usar calculada
+                </button>
+              )}
+            </div>
+            {feeDraft === null ? (
+              <b>{fee === null ? '—' : fee === 0 ? 'Isento' : `R$ ${fee},00`}</b>
+            ) : (
+              <label className="feeInput">
+                <span>R$</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  autoFocus
+                  aria-label="Valor da taxa"
+                  value={feeDraft}
+                  onChange={(e) => setFeeDraft(e.target.value)}
+                />
+              </label>
+            )}
+            <small>
+              {feeDraft === null
+                ? 'Este valor é gravado na coluna taxa.'
+                : `Calculada pela idade: ${calculatedFee === null ? '—' : calculatedFee === 0 ? 'Isento' : `R$ ${calculatedFee},00`}. Use 0 para isento.`}
+            </small>
           </div>
           <div className="actions">
             <button type="submit" className={saving ? 'is-loading' : undefined}>
@@ -575,6 +631,7 @@ export default function App() {
                   setEditing(null);
                   setSourceMember(null);
                   setForm(EMPTY_REGISTRATION);
+                  setFeeDraft(null);
                   setRepQ('');
                 }}
               >

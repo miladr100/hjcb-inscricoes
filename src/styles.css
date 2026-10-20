@@ -673,6 +673,34 @@ button,
   color: var(--text-muted);
 }
 
+.feeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.feeHead .mini {
+  padding: 4px 6px;
+}
+
+.feeInput {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.feeInput input {
+  width: 100%;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .actions {
   display: flex;
   gap: 8px;
