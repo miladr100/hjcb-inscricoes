@@ -27,6 +27,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<'form' | 'cards' | 'members'>('form');
   const [tablePage, setTablePage] = useState(0);
+  const [tableQuery, setTableQuery] = useState('');
   const [sourceMember, setSourceMember] = useState<Member | null>(null);
   const [memberPrompt, setMemberPrompt] = useState<'update' | 'create' | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -110,7 +111,12 @@ export default function App() {
       .slice(0, 12);
   }, [repQ, regs, form.registrationType, form.representativeName, form.id, editing]);
 
-  const tableRegs = useMemo(() => [...regs].sort((a, b) => b.row - a.row), [regs]);
+  const tableRegs = useMemo(() => {
+    const s = tableQuery.trim().toLowerCase();
+    return [...regs]
+      .filter((r) => !s || fullName(r).toLowerCase().includes(s))
+      .sort((a, b) => b.row - a.row);
+  }, [regs, tableQuery]);
   const tablePageCount = Math.max(1, Math.ceil(tableRegs.length / TABLE_PAGE_SIZE));
   const visibleRegs = tableRegs.slice(tablePage * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE);
 
@@ -119,6 +125,7 @@ export default function App() {
   }, [tablePage, tablePageCount]);
 
   const fee = money(form.age);
+  const exempt = fee === 0;
 
   const pick = (m: Member) => {
     setForm({
@@ -163,20 +170,26 @@ export default function App() {
     setMemberPrompt(null);
     setSaving(true);
     try {
-      const payload = { ...form, cpf: cpfDigits(form.cpf), id: form.id || crypto.randomUUID() };
+      const payload = {
+        ...form,
+        paid: exempt ? 'Pago' : form.paid,
+        cpf: cpfDigits(form.cpf),
+        id: form.id || crypto.randomUUID(),
+      };
+      const action = editing ? 'Inscrição atualizada' : 'Inscrição realizada';
       let done = editing ? 'Inscrição atualizada.' : 'Inscrição realizada com sucesso.';
-      if (!editing && updateCadastro && !sourceMember) {
+      if (updateCadastro && !sourceMember) {
         await req('/members', { method: 'POST', body: JSON.stringify(payload) });
-        done = 'Inscrição realizada e pessoa adicionada ao cadastro de membros.';
+        done = `${action} e pessoa adicionada ao cadastro de membros.`;
       }
       if (editing) await req(`/registrations/${editing.row}`, { method: 'PUT', body: JSON.stringify(payload) });
       else await req('/registrations', { method: 'POST', body: JSON.stringify(payload) });
       if (updateCadastro && sourceMember) {
         try {
           await req(`/members/${sourceMember.row}`, { method: 'PUT', body: JSON.stringify(payload) });
-          done = 'Inscrição realizada e cadastro do membro atualizado.';
+          done = `${action} e cadastro do membro atualizado.`;
         } catch (memberError: any) {
-          done = `Inscrição realizada, mas o cadastro do membro não foi atualizado: ${memberError.message}`;
+          done = `${action}, mas o cadastro do membro não foi atualizado: ${memberError.message}`;
         }
       }
       setMsg(done);
@@ -205,11 +218,11 @@ export default function App() {
       setMsg('Selecione o representante na lista de inscritos.');
       return;
     }
-    if (!editing && sourceMember && memberCadastroChanged(sourceMember, form)) {
+    if (sourceMember && memberCadastroChanged(sourceMember, form)) {
       setMemberPrompt('update');
       return;
     }
-    if (!editing && !sourceMember) {
+    if (!sourceMember) {
       setMemberPrompt('create');
       return;
     }
@@ -221,8 +234,9 @@ export default function App() {
       r.representativeName ||
       fullName(regs.find((x) => x.tis && x.tis === r.representativeTis) || {}) ||
       '';
+    const id = (r.id || '').trim();
     setEditing(r);
-    setSourceMember(null);
+    setSourceMember((id && members.find((m) => (m.id || '').trim() === id)) || null);
     setForm({ ...EMPTY_REGISTRATION, ...r, age: calcAge(r.birthDate), representativeName });
     setRepQ(representativeName);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -482,7 +496,7 @@ export default function App() {
           )}
           <label>
             Pagamento
-            <select value={form.paid} onChange={(e) => set('paid', e.target.value)}>
+            <select value={exempt ? 'Pago' : form.paid} disabled={exempt} onChange={(e) => set('paid', e.target.value)}>
               <option>Não pago</option>
               <option>Pago</option>
             </select>
@@ -503,6 +517,7 @@ export default function App() {
                 className="ghost"
                 onClick={() => {
                   setEditing(null);
+                  setSourceMember(null);
                   setForm(EMPTY_REGISTRATION);
                   setRepQ('');
                 }}
@@ -526,6 +541,20 @@ export default function App() {
             Exportar CSV
           </a>
         </div>
+        <label className="filterSearch tableSearch">
+          Buscar por nome
+          <input
+            type="search"
+            value={tableQuery}
+            placeholder="Nome ou sobrenome"
+            aria-label="Filtro por nome na tabela"
+            onChange={(e) => {
+              setTableQuery(e.target.value);
+              setTablePage(0);
+            }}
+          />
+        </label>
+        {regs.length > 0 && tableRegs.length === 0 && <p className="empty">Nenhuma inscrição com este nome.</p>}
         <div className="tableWrap">
           <table>
             <thead>
@@ -617,15 +646,16 @@ export default function App() {
               <>
                 <h2 id="member-prompt-title">Atualizar cadastro do membro?</h2>
                 <p>
-                  Os dados trazidos do cadastro foram alterados. Deseja salvar essas alterações também na planilha de
-                  membros?
+                  {editing
+                    ? 'Os dados desta inscrição estão diferentes do cadastro de membros. Deseja salvar essas alterações também na planilha de membros?'
+                    : 'Os dados trazidos do cadastro foram alterados. Deseja salvar essas alterações também na planilha de membros?'}
                 </p>
                 <div className="actions">
                   <button type="button" onClick={() => submitInscription(true)}>
                     Sim, atualizar cadastro
                   </button>
                   <button type="button" className="ghost" onClick={() => submitInscription(false)}>
-                    Não, só inscrever
+                    {editing ? 'Não, só salvar inscrição' : 'Não, só inscrever'}
                   </button>
                 </div>
               </>
@@ -633,8 +663,9 @@ export default function App() {
               <>
                 <h2 id="member-prompt-title">Cadastro obrigatório</h2>
                 <p>
-                  Toda pessoa inscrita precisa constar no cadastro de membros. Ao concordar, ela será cadastrada e
-                  inscrita. Se fechar este aviso, nada será gravado.
+                  {editing
+                    ? 'Esta pessoa ainda não consta no cadastro de membros. Ao concordar, ela será cadastrada e a inscrição será salva. Se fechar este aviso, nada será gravado.'
+                    : 'Toda pessoa inscrita precisa constar no cadastro de membros. Ao concordar, ela será cadastrada e inscrita. Se fechar este aviso, nada será gravado.'}
                 </p>
                 <div className="actions">
                   <button type="button" onClick={() => submitInscription(true)}>

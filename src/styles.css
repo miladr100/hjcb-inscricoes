@@ -339,6 +339,11 @@ header small {
   width: 100%;
 }
 
+.tableSearch {
+  display: block;
+  margin: 12px 0;
+}
+
 .filterSelects {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
