@@ -404,7 +404,14 @@ export default function App() {
         </button>
       </nav>
       {tab === 'cards' ? (
-        <RegistrationsBoard regs={regs} goal={event.goal} />
+        <RegistrationsBoard
+          regs={regs}
+          goal={event.goal}
+          onEdit={(r) => {
+            edit(r);
+            setTab('form');
+          }}
+        />
       ) : tab === 'members' ? (
         <MembersBoard
           members={members}

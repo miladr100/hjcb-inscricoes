@@ -28,7 +28,15 @@ function typeOf(r: Registration) {
   return r.registrationType || 'Participante';
 }
 
-export function RegistrationsBoard({ regs, goal }: { regs: Registration[]; goal: number }) {
+export function RegistrationsBoard({
+  regs,
+  goal,
+  onEdit,
+}: {
+  regs: Registration[];
+  goal: number;
+  onEdit: (r: Registration) => void;
+}) {
   const [open, setOpen] = useState<Registration | null>(null);
   const [paidFilter, setPaidFilter] = useState<PaidFilter>('all');
   const [feeFilter, setFeeFilter] = useState<FeeFilter>('all');
@@ -149,7 +157,20 @@ export function RegistrationsBoard({ regs, goal }: { regs: Registration[]; goal:
         {regs.length === 0 && <p className="empty">Nenhuma inscrição ainda.</p>}
         {regs.length > 0 && visible.length === 0 && <p className="empty">Nenhum inscrito neste filtro.</p>}
         {visible.map((r) => (
-          <button type="button" className="regCard" key={r.row} onClick={() => setOpen(r)}>
+          <div
+            role="button"
+            tabIndex={0}
+            className="regCard"
+            key={r.row}
+            onClick={() => setOpen(r)}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setOpen(r);
+              }
+            }}
+          >
             <h3>{fullName(r)}</h3>
             <div className="regMeta">
               <span>
@@ -177,7 +198,24 @@ export function RegistrationsBoard({ regs, goal }: { regs: Registration[]; goal:
                 {formatFee(feeOf(r))}
               </span>
             </div>
-          </button>
+            <button
+              type="button"
+              className="mini iconAction regEdit"
+              aria-label={`Editar ${fullName(r)}`}
+              title="Editar"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(r);
+              }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zm17.7-10.2a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                />
+              </svg>
+            </button>
+          </div>
         ))}
       </section>
       {open && (

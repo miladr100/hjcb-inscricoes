@@ -810,8 +810,11 @@ button,
     minmax(0, 0.55fr)
     minmax(0, 1fr)
     minmax(0, 1.2fr)
-    minmax(0, 0.8fr);
+    minmax(0, 0.8fr)
+    auto;
   align-items: center;
+  position: relative;
+  cursor: pointer;
   gap: 8px 14px;
   width: 100%;
   text-align: left;
@@ -820,6 +823,11 @@ button,
   border-radius: 18px;
   padding: 14px 18px;
   box-shadow: var(--shadow);
+  font-weight: 700;
+}
+
+.regEdit {
+  justify-self: end;
 }
 
 .regCard h3 {
@@ -931,6 +939,16 @@ td {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+  }
+
+  .regCard h3 {
+    padding-right: 36px;
+  }
+
+  .regEdit {
+    position: absolute;
+    top: 8px;
+    right: 8px;
   }
 
   .regMeta {

@@ -237,14 +237,6 @@ export function MembersBoard({
                 <dd>{m.age ?? calcAge(m.birthDate) ?? '—'}</dd>
               </div>
               <div>
-                <dt>CPF</dt>
-                <dd>{m.cpf ? cpfMask(m.cpf) : '—'}</dd>
-              </div>
-              <div>
-                <dt>RG / RNM / RNE</dt>
-                <dd>{m.document || '—'}</dd>
-              </div>
-              <div>
                 <dt>Grupo</dt>
                 <dd>{m.group || '—'}</dd>
               </div>
