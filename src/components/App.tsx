@@ -14,6 +14,14 @@ import type { Member, Registration } from '../types';
 const TABLE_PAGE_SIZE = 15;
 const TYPE_SHORT: Record<string, string> = { Participante: 'P', 'JS Registration': 'JS', Representative: 'R' };
 
+function pageItems(current: number, count: number): (number | 'gap')[] {
+  const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  if (count <= 7) return range(0, count - 1);
+  if (current <= 3) return [...range(0, 4), 'gap', count - 1];
+  if (current >= count - 4) return [0, 'gap', ...range(count - 5, count - 1)];
+  return [0, 'gap', current - 1, current, current + 1, 'gap', count - 1];
+}
+
 export default function App() {
   const [auth, setAuth] = useState<boolean | null>(null);
   const [ready, setReady] = useState(false);
@@ -786,26 +794,42 @@ export default function App() {
               {tableRegs.length}
             </small>
             <nav aria-label="Páginas da tabela de inscrições">
-              <button type="button" className="ghost" disabled={tablePage === 0} onClick={() => setTablePage((p) => p - 1)}>
-                Anterior
-              </button>
-              {Array.from({ length: tablePageCount }, (_, i) => (
-                <button
-                  type="button"
-                  key={i}
-                  className={i === tablePage ? 'active' : 'ghost'}
-                  onClick={() => setTablePage(i)}
-                >
-                  {i + 1}
-                </button>
-              ))}
               <button
                 type="button"
-                className="ghost"
+                className="ghost pagerStep"
+                aria-label="Página anterior"
+                disabled={tablePage === 0}
+                onClick={() => setTablePage((p) => p - 1)}
+              >
+                <span aria-hidden="true">‹</span>
+                <span className="pagerStepText">Anterior</span>
+              </button>
+              {pageItems(tablePage, tablePageCount).map((item, i) =>
+                item === 'gap' ? (
+                  <span key={`gap-${i}`} className="pagerGap" aria-hidden="true">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    key={item}
+                    className={item === tablePage ? 'active' : 'ghost'}
+                    aria-current={item === tablePage ? 'page' : undefined}
+                    onClick={() => setTablePage(item)}
+                  >
+                    {item + 1}
+                  </button>
+                ),
+              )}
+              <button
+                type="button"
+                className="ghost pagerStep"
+                aria-label="Próxima página"
                 disabled={tablePage >= tablePageCount - 1}
                 onClick={() => setTablePage((p) => p + 1)}
               >
-                Próxima
+                <span className="pagerStepText">Próxima</span>
+                <span aria-hidden="true">›</span>
               </button>
             </nav>
           </div>

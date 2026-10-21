@@ -924,6 +924,41 @@ button,
   color: var(--accent-text);
 }
 
+.pager nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.pagerGap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 650px) {
+  .pager {
+    justify-content: center;
+  }
+
+  .pager nav {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .pager nav button {
+    min-width: 36px;
+    padding: 8px 6px;
+  }
+
+  .pagerStepText {
+    display: none;
+  }
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
