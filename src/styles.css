@@ -448,6 +448,10 @@ tr.is-selected td {
     white-space: normal;
   }
 
+  .tableWrap .blessingCol {
+    display: none;
+  }
+
   .tableWrap .selectCell input {
     width: 16px;
     height: 16px;

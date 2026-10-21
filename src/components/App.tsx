@@ -704,7 +704,7 @@ export default function App() {
                   />
                 </th>
                 <th>Nome</th>
-                <th>Bênção</th>
+                <th className="blessingCol">Bênção</th>
                 <th title="P = Participante, JS = JS Registration, R = Representative">Tipo</th>
                 <th title="Pagamento">Pag.</th>
                 <th>Taxa</th>
@@ -728,7 +728,7 @@ export default function App() {
                   <td className="nameCell" title={fullName(r)}>
                     {r.givenName} {r.familyName}
                   </td>
-                  <td className="wrapCell">{r.blessing}</td>
+                  <td className="wrapCell blessingCol">{r.blessing}</td>
                   <td title={r.registrationType || 'Participante'}>{TYPE_SHORT[r.registrationType || 'Participante'] || 'P'}</td>
                   <td>
                     {r.paid === 'Pago' ? (
