@@ -65,6 +65,9 @@ export function SettingsModal({
           <span>Aparência</span>
           <ThemeToggle />
         </div>
+        <a className="button ghost settingsSheet" href="/api/sheet" target="_blank" rel="noopener noreferrer">
+          Acessar planilha
+        </a>
         <button type="button" className="ghost settingsLogout" onClick={onLogout}>
           Fazer logout
         </button>

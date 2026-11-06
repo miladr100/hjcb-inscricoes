@@ -224,6 +224,10 @@ async function inscriptionSheetId() {
   return sheetId;
 }
 
+export async function inscriptionSheetUrl() {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=${await inscriptionSheetId()}`;
+}
+
 async function insertColumn(startIndex: number) {
   await sheets().spreadsheets.batchUpdate({
     spreadsheetId: SHEET_ID,

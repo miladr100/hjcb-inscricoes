@@ -172,6 +172,14 @@ header {
   font-weight: 650;
 }
 
+.settingsSheet {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
 .settingsLogout {
   width: 100%;
 }
